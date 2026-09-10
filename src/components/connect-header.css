@@ -1,0 +1,63 @@
+/* Copied from Connect styles/site.css; header and wordmark only. */
+:root {
+  --site-header-content-width: min(1184px, calc(100% - 64px));
+  --site-header-row-height: 52px;
+  --site-header-padding: 8px;
+  --site-header-brand-size: clamp(20px, 2vw, 23px);
+  --site-header-collapsed-width: min(680px, calc(100% - 24px));
+  --site-header-collapsed-content-width: min(632px, calc(100% - 56px));
+--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.center-nav { display: flex; width: max-content; max-width: 100%; align-items: center; justify-self: center; gap: 3px; border: 1px solid color-mix(in srgb, var(--center-nav-foreground) 12%, transparent); border-radius: 999px; background: var(--center-nav-background); padding: 5px; box-shadow: 0 3px 12px color-mix(in srgb, var(--center-nav-background) 8%, transparent); }
+.center-nav-link { position: relative; isolation: isolate; display: flex; min-width: 36px; min-height: 36px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 999px; padding: 0 10px; color: color-mix(in srgb, var(--center-nav-foreground) 76%, transparent); font-size: 11px; font-weight: 550; white-space: nowrap; transition: background 220ms, color 220ms; }
+.center-nav-link:hover { background: color-mix(in srgb, var(--center-nav-foreground) 8%, transparent); color: var(--center-nav-foreground); }
+.center-nav-link.is-active { color: var(--center-nav-foreground); }
+.center-nav-highlight { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: color-mix(in srgb, var(--center-nav-foreground) 13%, transparent); pointer-events: none; }
+.center-nav-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.center-nav-caption-position { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); pointer-events: none; }
+.center-nav-caption { display: block; padding: 6px 13px; border-radius: 999px; background: #e9edf2; color: #20272b; box-shadow: 0 6px 18px color-mix(in srgb, var(--foreground) 8%, transparent); font-size: 12px; font-weight: 500; line-height: 1.4; white-space: nowrap; transform-origin: center top; }
+.dark .center-nav-caption { background: var(--accent); color: var(--foreground); }
+.center-header[data-collapsed="true"] > .center-nav-caption-position { transform: translate(-50%, 12px); }
+.center-nav-link:focus-visible, .center-brand:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+.center-nav-link:focus-visible { outline-color: var(--center-nav-foreground); outline-offset: -3px; }
+.center-userbar { display: flex; min-width: 0; align-items: center; justify-self: end; gap: 10px; font-size: 12px; }
+.center-userbar > a { flex-shrink: 0; border-radius: 50%; }
+.center-userbar > a:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+.center-header { position: sticky; top: 0; z-index: 20; isolation: isolate; padding-block: var(--site-header-padding); pointer-events: none; }
+.center-header::before { content: ""; position: absolute; inset: 0; z-index: -1; width: 100%; margin-inline: auto; background: rgb(255 255 255 / 92%); backdrop-filter: blur(20px); border: 1px solid transparent; border-bottom-color: #1414130d; transition: width 600ms var(--ease-out-soft), transform 600ms var(--ease-out-soft), border-radius 600ms var(--ease-out-soft), box-shadow 500ms ease; }
+.center-header-inner { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 20px; width: var(--site-header-content-width); min-height: var(--site-header-row-height); margin-inline: auto; transition: width 600ms var(--ease-out-soft), transform 600ms var(--ease-out-soft); }
+.center-header-inner > * { pointer-events: auto; }
+.center-header .home-brand { justify-self: start; }
+.center-header .home-brand:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+.center-header .center-nav { --center-nav-foreground: #20272b; grid-area: auto; border: 0; box-shadow: none; background: transparent; padding: 0; }
+.center-header .center-userbar { grid-area: auto; }
+.center-header .center-nav-link { min-height: 36px; font-size: 14px; }
+.center-header .center-nav-highlight { background: #e9edf2; }
+.center-header .center-nav-link:hover { background: #f0f2f5; }
+.center-header[data-collapsed="true"]::before { width: var(--site-header-collapsed-width); transform: translateY(12px); border-radius: 34px; border-color: #1414130d; box-shadow: 0 12px 36px #14141312, 0 2px 8px #14141306; }
+.center-header[data-collapsed="true"] .center-header-inner { width: var(--site-header-collapsed-content-width); transform: translateY(12px); }
+@media (max-width: 720px) {
+  .center-header-inner { gap: 8px; grid-template-columns: auto minmax(0, 1fr) auto; }
+  .center-header .center-nav { gap: 0; }
+  .center-header .center-nav-link { min-width: 32px; padding-inline: 8px; }
+}
+@media (max-width: 360px) {
+  .center-header .center-nav-link { min-width: 28px; padding-inline: 6px; }
+}
+@media (prefers-reduced-motion: reduce) { .center-header::before, .center-header-inner { transition: none; } }
+.home-brand { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; color: var(--foreground); flex-shrink: 0; }
+.home-wordmark { display: inline-flex; align-items: baseline; font-family: Arial, "Helvetica Neue", sans-serif; font-size: 27px; font-weight: 800; letter-spacing: -.055em; line-height: 1.2; white-space: nowrap; }
+.home-header .home-wordmark, .center-header .home-wordmark { font-family: inherit; font-size: var(--site-header-brand-size); font-weight: 600; letter-spacing: -.025em; text-transform: uppercase; }
+.home-wordmark-part { display: inline-block; overflow: hidden; vertical-align: bottom; }
+.theme-toggle .theme-icon-dark, .dark .theme-toggle .theme-icon-light { display: none; }
+.dark .theme-toggle .theme-icon-dark { display: block; }
+@media (max-width: 600px) {
+  :is(.home-header, .center-header) .home-wordmark-part { display: none; }
+  .center-header .center-userbar { gap: 2px; }
+  .center-header .center-userbar [data-slot="button"] { width: 32px; }
+}
+.dark .center-header::before { background: color-mix(in srgb, var(--background) 92%, transparent); border-color: var(--border); }
+.dark .center-header .center-nav { --center-nav-foreground: var(--foreground); }
+.dark .center-header .center-nav-highlight, .dark .center-header .center-nav-link:hover { background: var(--accent); }
+@media (max-width: 600px) { :root { --site-header-content-width: calc(100% - 40px); --site-header-row-height: 44px; --site-header-collapsed-width: calc(100% - 16px); --site-header-collapsed-content-width: calc(100% - 40px); } }
+@media (max-width: 360px) { :root { --site-header-content-width: calc(100% - 32px); --site-header-collapsed-content-width: calc(100% - 32px); } }

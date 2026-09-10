@@ -1,0 +1,12 @@
+export type HealthStatus = "operational" | "maintenance" | "error" | "unknown";
+export type HealthResult = { status: HealthStatus; code: number | null; latency: number | null; checkedAt: string | null; message: string };
+export type HealthDay = { date: string; operational: number; maintenance: number; error: number };
+export type HealthSlice = { slot: string; operational: number; maintenance: number; error: number };
+export type Service = { id: string; name: string; url: string; revision: string; result: HealthResult; history?: HealthDay[]; timeline?: HealthSlice[] };
+export type IncidentUpdate = { id: string; label: string; message: string; createdAt: string };
+export type Incident = { id: string; title: string; color?: "red" | "yellow"; serviceId: string | null; resolved: boolean; published: boolean; publishedAt: string | null; updatedAt: string; updates: IncidentUpdate[] };
+export type Store = { version: 1; services: Service[]; incidents: Incident[] };
+export type PublicService = Omit<Service, "url" | "revision">;
+export type PublicState = { services: PublicService[]; incidents: Incident[]; generatedAt: string; intervalSeconds: number };
+export const statusLabels: Record<HealthStatus, string> = { operational: "运行正常", maintenance: "维护中", error: "服务异常", unknown: "等待检测" };
+export const unchecked: HealthResult = { status: "unknown", code: null, latency: null, checkedAt: null, message: "尚未检测" };
