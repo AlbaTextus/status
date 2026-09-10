@@ -1,5 +1,4 @@
 import { getDatabase } from "./cloudflare";
-import { checkServices, scheduledCheck } from "./monitor";
 
 const SCHEDULER_SYMBOL = Symbol.for("__albatextus_internal_scheduler__");
 
@@ -7,6 +6,7 @@ interface SchedulerState {
   timer: NodeJS.Timeout | null;
   running: boolean;
   intervalMs: number;
+  runTask: () => Promise<void>;
 }
 
 export function startInternalScheduler(intervalMs = 60_000): void {
@@ -14,14 +14,16 @@ export function startInternalScheduler(intervalMs = 60_000): void {
     [SCHEDULER_SYMBOL]?: SchedulerState;
   };
 
-  if (globalObj[SCHEDULER_SYMBOL]) {
-    return;
+  let existing = globalObj[SCHEDULER_SYMBOL];
+  if (existing && !existing.runTask) {
+    if (existing.timer) clearInterval(existing.timer);
+    existing = undefined;
   }
-
-  const state: SchedulerState = {
+  const state: SchedulerState = existing ?? {
     timer: null,
     running: false,
     intervalMs,
+    runTask: async () => {},
   };
   globalObj[SCHEDULER_SYMBOL] = state;
 
@@ -29,10 +31,12 @@ export function startInternalScheduler(intervalMs = 60_000): void {
     if (state.running) return;
     state.running = true;
     try {
+      const { scheduledCheck } = await import("./monitor");
       const db = await getDatabase();
       await scheduledCheck(db);
     } catch {
       try {
+        const { checkServices } = await import("./monitor");
         await checkServices();
       } catch (err) {
         console.error("[Scheduler] Internal check error:", err);
@@ -41,15 +45,18 @@ export function startInternalScheduler(intervalMs = 60_000): void {
       state.running = false;
     }
   };
+  state.runTask = runTask;
+  // Refresh the callback after a development reload without duplicating timers.
+  if (existing) return;
 
   // Initial trigger after 2 seconds
   setTimeout(() => {
-    runTask().catch(() => {});
+    state.runTask().catch(() => {});
   }, 2_000);
 
   // Periodic recurring check
   state.timer = setInterval(() => {
-    runTask().catch(() => {});
+    state.runTask().catch(() => {});
   }, intervalMs);
 
   if (state.timer.unref) {

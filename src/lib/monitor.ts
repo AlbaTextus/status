@@ -163,11 +163,17 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
 
           // 3. Operational recovery tracking (检测到正常服务后持续满 5 分钟自动取消维护/异常事态)
           if (result.status === "operational") {
-            const activeIncidentToResolve = current.autoMaintenanceIncidentId
-              ? state.incidents.find(inc => inc.id === current.autoMaintenanceIncidentId && !inc.resolved)
-              : state.incidents.find(inc => inc.serviceId === current.id && !inc.resolved && (inc.title.includes("服务异常") || inc.title.includes("计划维护")));
+            const activeIncidentToResolve = state.incidents.find(inc =>
+              inc.id === current.autoMaintenanceIncidentId && inc.serviceId === current.id && inc.published && !inc.resolved
+            ) ?? state.incidents.find(inc =>
+              inc.serviceId === current.id && inc.published && !inc.resolved &&
+              (inc.title.includes("服务异常") || inc.title.includes("计划维护"))
+            );
 
             if (activeIncidentToResolve) {
+              // Keep the persisted link in sync when recovering a legacy incident.
+              // The admin recovery indicator also consumes this association.
+              current.autoMaintenanceIncidentId = activeIncidentToResolve.id;
               if (!current.maintenanceRecoveringSince) {
                 current.maintenanceRecoveringSince = result.checkedAt ?? nowIso;
               } else {
