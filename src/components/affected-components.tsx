@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Clock, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { HealthLabel } from "./health-label";
 import { statusLabels, type Incident, type PublicService, type HealthStatus, type UpdateStatusKind } from "@/lib/types";
@@ -95,6 +95,8 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
   const incidentEnd = isOngoing ? Math.max(mountTime, lastUpdate) : lastUpdate;
 
   const outageDuration = Math.max(incidentEnd - incidentStart, 15 * 60 * 1000);
+  const effectiveColor = resolveIncidentColor(incident);
+  const isMaintenance = effectiveColor === "yellow" || incident.title.includes("维护");
 
   // Calculate segment percentage proportions
   let prePct: number;
@@ -160,14 +162,13 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
   }> = [];
 
   if (activeUpdates.length === 0) {
-    const effectiveColor = resolveIncidentColor(incident);
     const fallbackStatus: UpdateStatusKind = effectiveColor === "red" ? "outage" : "monitoring";
     rawPhases.push({
       id: "phase-default",
       start: incidentStart,
       end: actualOutageEnd,
       status: fallbackStatus,
-      label: fallbackStatus === "outage" ? "严重故障" : "性能降级 / 关注中",
+      label: fallbackStatus === "outage" ? "严重故障" : (isMaintenance ? "计划维护" : "性能降级 / 关注中"),
       duration: Math.max(actualOutageEnd - incidentStart, 60000),
     });
   } else {
@@ -182,7 +183,7 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
         start: pStart,
         end: pEnd,
         status: curr.status,
-        label: curr.update.label || (curr.status === "outage" ? "严重故障" : "性能降级 / 关注中"),
+        label: curr.update.label || (curr.status === "outage" ? "严重故障" : (isMaintenance ? "计划维护" : "性能降级 / 关注中")),
         message: curr.update.message,
         duration,
       });
@@ -281,7 +282,6 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
           <div className="affected-components-list">
             {affectedList.map(item => {
               const liveStatus: HealthStatus = item.liveService?.result.status ?? "unknown";
-              const isLiveDown = liveStatus === "error" || liveStatus === "maintenance";
               const isExpanded = expandedId === item.id;
 
               return (
@@ -341,7 +341,7 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                             type="button"
                             className="affected-bar-segment segment-operational"
                             style={{ width: `${prePct}%` }}
-                            aria-label={`故障前正常: ${formatTooltipRange(windowStart, incidentStart)}`}
+                            aria-label={`发生前正常: ${formatTooltipRange(windowStart, incidentStart)}`}
                           />
                         }
                       />
@@ -352,7 +352,7 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                           </div>
                           <div className="affected-tooltip-status text-(--success)">
                             <CheckCircle2 className="size-3.5 shrink-0" />
-                            <span>正常运行 · 故障前</span>
+                            <span>正常运行 · {isMaintenance ? "维护前" : "故障前"}</span>
                           </div>
                         </div>
                       </TooltipContent>
@@ -393,10 +393,18 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                                 phase.status === "neutral" && "text-muted-foreground"
                               )}
                             >
-                              <AlertTriangle className="size-3.5 shrink-0" />
+                              {phase.status === "outage" ? (
+                                <AlertTriangle className="size-3.5 shrink-0" />
+                              ) : isMaintenance ? (
+                                <Clock className="size-3.5 shrink-0" />
+                              ) : (
+                                <AlertTriangle className="size-3.5 shrink-0" />
+                              )}
                               <span>
                                 {phase.status === "outage"
                                   ? "严重故障"
+                                  : isMaintenance
+                                  ? "计划维护中"
                                   : "观察与缓解中"}
                                 {phase.label ? ` (${phase.label})` : ""}
                               </span>
@@ -418,7 +426,7 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                           render={
                             <button
                               type="button"
-                              className={`affected-bar-segment ${isLiveDown ? "segment-outage" : "segment-operational"}`}
+                              className="affected-bar-segment segment-operational"
                               style={{ width: `${postPct}%` }}
                               aria-label={`恢复后状态: ${formatTooltipRange(incidentEnd, windowEnd)}`}
                             />
@@ -429,20 +437,9 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                             <div className="affected-tooltip-time">
                               {formatTooltipRange(incidentEnd, windowEnd)}
                             </div>
-                            <div
-                              className={`affected-tooltip-status ${isLiveDown ? "text-(--outage)" : "text-(--success)"}`}
-                            >
-                              {isLiveDown ? (
-                                <>
-                                  <AlertTriangle className="size-3.5 shrink-0" />
-                                  <span>严重故障 · 实时探测仍异常</span>
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle2 className="size-3.5 shrink-0" />
-                                  <span>恢复正常 · 运行良好</span>
-                                </>
-                              )}
+                            <div className="affected-tooltip-status text-(--success)">
+                              <CheckCircle2 className="size-3.5 shrink-0" />
+                              <span>恢复正常 · 运行良好</span>
                             </div>
                           </div>
                         </TooltipContent>

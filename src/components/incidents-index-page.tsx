@@ -9,6 +9,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "./
 import { AffectedComponents } from "./affected-components";
 import { UpdatesTimeline } from "./incident-page";
 import { statusLabels, type PublicState } from "@/lib/types";
+import { resolveIncidentColor } from "@/lib/incident-status";
 
 interface IncidentsIndexPageProps {
   data: PublicState;
@@ -34,7 +35,7 @@ export function IncidentsIndexPage({ data, initialSelectedId }: IncidentsIndexPa
 
   const featuredIncident = published.find(i => i.id === selectedId) ?? published[0];
   const featuredService = featuredIncident ? data.services.find(s => s.id === featuredIncident.serviceId) : undefined;
-  const isServiceDown = featuredService ? featuredService.result.status !== "operational" : false;
+  const isFeaturedMaintenance = featuredIncident ? (resolveIncidentColor(featuredIncident) === "yellow" || featuredIncident.title.includes("维护")) : false;
 
   const otherIncidents = published.filter(i => i.id !== featuredIncident?.id);
 
@@ -56,13 +57,22 @@ export function IncidentsIndexPage({ data, initialSelectedId }: IncidentsIndexPa
                 <div className="incident-title-row">
                   <h1>{featuredIncident.title}</h1>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant={featuredIncident.resolved ? "secondary" : "destructive"}>
-                      {featuredIncident.resolved ? "已解决" : "故障处理中"}
+                    <Badge
+                      variant={featuredIncident.resolved ? "secondary" : isFeaturedMaintenance ? "outline" : "destructive"}
+                      className={!featuredIncident.resolved && isFeaturedMaintenance ? "bg-(--warning)/15 text-(--warning) border-(--warning)/40" : undefined}
+                    >
+                      {featuredIncident.resolved ? "已解决" : isFeaturedMaintenance ? "计划维护中" : "故障处理中"}
                     </Badge>
-                    {featuredService && isServiceDown && (
-                      <Badge variant="destructive" className="bg-(--outage)/15 text-(--outage) border-(--outage)/40">
-                        {featuredService.name} 实时探测异常
-                      </Badge>
+                    {featuredService && (
+                      featuredService.result.status === "error" ? (
+                        <Badge variant="destructive" className="bg-(--outage)/15 text-(--outage) border-(--outage)/40">
+                          {featuredService.name} 实时探测异常
+                        </Badge>
+                      ) : featuredService.result.status === "maintenance" ? (
+                        <Badge variant="outline" className="bg-(--warning)/15 text-(--warning) border-(--warning)/40">
+                          {featuredService.name} 维护中
+                        </Badge>
+                      ) : null
                     )}
                   </div>
                 </div>
@@ -98,6 +108,7 @@ export function IncidentsIndexPage({ data, initialSelectedId }: IncidentsIndexPa
                   <div className="past-incidents-list system-panel mt-3">
                     {otherIncidents.map(incident => {
                       const service = data.services.find(s => s.id === incident.serviceId);
+                      const isItemMaintenance = resolveIncidentColor(incident) === "yellow" || incident.title.includes("维护");
                       return (
                         <button
                           key={incident.id}
@@ -108,12 +119,15 @@ export function IncidentsIndexPage({ data, initialSelectedId }: IncidentsIndexPa
                           <div className="past-incident-main">
                             <div className="past-incident-title-row">
                               <h3 className="past-incident-title">{incident.title}</h3>
-                              <Badge variant={incident.resolved ? "secondary" : "destructive"}>
-                                {incident.resolved ? "已解决" : "进行中"}
+                              <Badge
+                                variant={incident.resolved ? "secondary" : isItemMaintenance ? "outline" : "destructive"}
+                                className={!incident.resolved && isItemMaintenance ? "bg-(--warning)/15 text-(--warning) border-(--warning)/40" : undefined}
+                              >
+                                {incident.resolved ? "已解决" : isItemMaintenance ? "维护中" : "故障中"}
                               </Badge>
                               {service && (
                                 <span
-                                  className={`service-tag ${service.result.status !== "operational" ? "text-(--outage) bg-(--outage)/10 border border-(--outage)/30" : ""}`}
+                                  className={`service-tag ${service.result.status === "error" ? "text-(--outage) bg-(--outage)/10 border border-(--outage)/30" : service.result.status === "maintenance" ? "text-(--warning) bg-(--warning)/10 border border-(--warning)/30" : ""}`}
                                 >
                                   {service.name}{" "}
                                   {service.result.status !== "operational"

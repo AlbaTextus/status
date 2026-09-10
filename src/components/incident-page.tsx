@@ -18,6 +18,7 @@ import {
   UPDATE_STATUS_COLORS,
   formatUpdateTimestamp,
   resolveUpdateStatus,
+  resolveIncidentColor,
 } from "@/lib/incident-status";
 
 export { UPDATE_STATUS_COLORS, formatUpdateTimestamp, resolveUpdateStatus };
@@ -71,7 +72,8 @@ export function UpdatesTimeline({ incident }: { incident: Incident }) {
 }
 
 export function IncidentPage({ incident, service, allServices = [] }: IncidentPageProps) {
-  const isServiceDown = service ? service.result.status !== "operational" : false;
+  const incidentColor = resolveIncidentColor(incident);
+  const isMaintenance = incidentColor === "yellow" || incident.title.includes("维护");
 
   return (
     <>
@@ -89,13 +91,22 @@ export function IncidentPage({ incident, service, allServices = [] }: IncidentPa
             <div className="incident-title-row">
               <h1>{incident.title}</h1>
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant={incident.resolved ? "secondary" : "destructive"}>
-                  {incident.resolved ? "已解决" : "故障处理中"}
+                <Badge
+                  variant={incident.resolved ? "secondary" : isMaintenance ? "outline" : "destructive"}
+                  className={!incident.resolved && isMaintenance ? "bg-(--warning)/15 text-(--warning) border-(--warning)/40" : undefined}
+                >
+                  {incident.resolved ? "已解决" : isMaintenance ? "计划维护中" : "故障处理中"}
                 </Badge>
-                {service && isServiceDown && (
-                  <Badge variant="destructive" className="bg-(--outage)/15 text-(--outage) border-(--outage)/40">
-                    {service.name} 实时探测异常
-                  </Badge>
+                {service && (
+                  service.result.status === "error" ? (
+                    <Badge variant="destructive" className="bg-(--outage)/15 text-(--outage) border-(--outage)/40">
+                      {service.name} 实时探测异常
+                    </Badge>
+                  ) : service.result.status === "maintenance" ? (
+                    <Badge variant="outline" className="bg-(--warning)/15 text-(--warning) border-(--warning)/40">
+                      {service.name} 维护中
+                    </Badge>
+                  ) : null
                 )}
               </div>
             </div>
