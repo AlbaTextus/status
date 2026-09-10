@@ -305,16 +305,21 @@
 .updates-timeline-list { padding: 24px 20px 24px; display: flex; flex-direction: column; gap: 0; }
 .update-timeline-item { display: grid; grid-template-columns: 24px 1fr; gap: 12px; position: relative; }
 .update-timeline-track { display: flex; flex-direction: column; align-items: center; padding-top: 6px; }
-.update-node-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; z-index: 1; }
-.node-resolved { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 20%, transparent); }
-.node-monitoring { background: var(--outage); box-shadow: 0 0 0 3px color-mix(in srgb, var(--outage) 20%, transparent); }
-.node-neutral { background: var(--muted-foreground); }
-.update-node-line { width: 2px; flex: 1; min-height: 32px; background: var(--border); margin-block: 4px; }
-.update-timeline-content { padding-bottom: 24px; min-width: 0; }
+.update-node-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; z-index: 2; transition: all 0.2s ease; }
+.node-resolved { background: #24c19a; box-shadow: 0 0 0 3.5px rgba(36, 193, 154, 0.25); }
+.node-monitoring { background: #fbbf24; box-shadow: 0 0 0 3.5px rgba(251, 191, 36, 0.25); }
+.node-outage { background: #f87171; box-shadow: 0 0 0 3.5px rgba(248, 113, 113, 0.25); }
+.node-neutral { background: #91919c; box-shadow: 0 0 0 3px rgba(145, 145, 156, 0.2); }
+.update-node-line { width: 2px; flex: 1; min-height: 36px; margin-block: 4px; border-radius: 1px; }
+.update-timeline-content { padding-bottom: 26px; min-width: 0; }
 .update-timeline-item:last-child .update-timeline-content { padding-bottom: 0; }
-.update-timeline-label { font-size: 15px; font-weight: 600; line-height: 1.4; color: var(--foreground); margin-bottom: 6px; }
-.label-resolved { color: var(--success); }
-.label-monitoring { color: var(--outage); }
+.update-timeline-label { font-size: 15px; font-weight: 600; line-height: 1.4; margin-bottom: 6px; }
+.label-resolved { color: #10b981; }
+.dark .label-resolved { color: #24c19a; }
+.label-monitoring { color: #d97706; }
+.dark .label-monitoring { color: #fbbf24; }
+.label-outage { color: #dc2626; }
+.dark .label-outage { color: #f87171; }
 .label-neutral { color: var(--foreground); }
 .update-timeline-message { font-size: 14px; line-height: 1.6; color: var(--foreground); white-space: pre-wrap; word-break: break-word; }
 .update-timeline-time { display: block; margin-top: 8px; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }

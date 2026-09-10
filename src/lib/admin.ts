@@ -59,7 +59,18 @@ export async function adminAction(input: unknown) {
       if (data.color !== undefined && data.color !== "red" && data.color !== "yellow") throw new AdminError("公告颜色仅支持红色或黄色");
       if (typeof data.published !== "boolean" || typeof data.resolved !== "boolean") throw new AdminError("发布状态无效");
       if (!Array.isArray(data.updates) || !data.updates.length || data.updates.length > 50) throw new AdminError("请至少填写一条更新，最多 50 条");
-      const inputUpdates = data.updates.map(value => { const update = object(value); return { id: typeof update.id === "string" ? update.id : "", label: text(update.label, "更新状态", 80), message: text(update.message, "更新内容", 10000) }; });
+      const inputUpdates = data.updates.map(value => {
+        const update = object(value);
+        const status = typeof update.status === "string" && ["resolved", "monitoring", "outage", "neutral"].includes(update.status)
+          ? (update.status as "resolved" | "monitoring" | "outage" | "neutral")
+          : undefined;
+        return {
+          id: typeof update.id === "string" ? update.id : "",
+          label: text(update.label, "更新状态", 80),
+          message: text(update.message, "更新内容", 10000),
+          status,
+        };
+      });
       await mutateStore(state => {
         const id = typeof data.id === "string" ? data.id : randomUUID();
         const existing = state.incidents.find(incident => incident.id === id);
@@ -73,7 +84,13 @@ export async function adminAction(input: unknown) {
           const updateId = previous?.id ?? randomUUID();
           if (seen.has(updateId)) throw new AdminError("重复的更新记录");
           seen.add(updateId);
-          return { id: updateId, label: update.label, message: update.message, createdAt: previous?.createdAt ?? now };
+          return {
+            id: updateId,
+            label: update.label,
+            message: update.message,
+            createdAt: previous?.createdAt ?? now,
+            status: update.status ?? previous?.status,
+          };
         });
         const color = (data.color ?? existing?.color ?? "yellow") as "red" | "yellow";
         const next = { id, title, color, serviceId, resolved: data.resolved as boolean, published: data.published as boolean, publishedAt: data.published ? existing?.publishedAt ?? now : null, updatedAt: now, updates };
