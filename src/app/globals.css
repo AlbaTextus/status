@@ -82,6 +82,11 @@
 }
 
 .status-shell { width: min(100%, 718px); margin-inline: auto; padding: 36px 24px 28px; flex: 1; display: flex; flex-direction: column; }
+.page-transition { min-height: 100dvh; display: flex; flex-direction: column; }
+@keyframes content-fade-in { from { opacity: .7; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .page-transition .status-shell > main { animation: content-fade-in 160ms ease-out; }
+}
 .status-shell main { flex: 1; min-width: 0; }
 .admin-shell { width: min(100%, 960px); }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 28px; }

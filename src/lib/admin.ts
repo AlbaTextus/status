@@ -2,21 +2,21 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { mutateStore } from "./store";
 import { checkServices } from "./monitor";
 import { unchecked, type IncidentUpdate } from "./types";
+import { getStatusEnv } from "./cloudflare";
 
 export class AdminError extends Error { constructor(message: string, public status = 400) { super(message); } }
-export function authorize(request: Request) {
+export async function authorize(request: Request) {
   const origin = request.headers.get("origin");
   const host = request.headers.get("host");
   if (origin && new URL(origin).host !== host) throw new AdminError("不允许跨站管理请求", 403);
   if (request.headers.get("sec-fetch-site") === "cross-site") throw new AdminError("不允许跨站管理请求", 403);
-  const configured = process.env.STATUS_ADMIN_TOKEN;
+  const configured = (await getStatusEnv()).STATUS_ADMIN_TOKEN;
   if (configured) {
     const supplied = request.headers.get("x-admin-token") ?? "";
     const digest = (value: string) => createHash("sha256").update(value).digest();
     if (!timingSafeEqual(digest(configured), digest(supplied))) throw new AdminError("请输入管理密钥", 401);
   } else {
-    const hostname = new URL(`http://${host}`).hostname;
-    if (!["localhost", "127.0.0.1", "[::1]"].includes(hostname)) throw new AdminError("远程管理请先配置 STATUS_ADMIN_TOKEN", 403);
+    throw new AdminError("请先配置 STATUS_ADMIN_TOKEN 管理密钥", 403);
   }
 }
 const object = (value: unknown): Record<string, unknown> => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new AdminError("请求格式无效"); return value as Record<string, unknown>; };

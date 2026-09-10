@@ -2,7 +2,8 @@ import { mutateStore, readStore } from "./store";
 import type { HealthResult, Service } from "./types";
 import { recordHealth, recordTimelineHealth } from "./history";
 
-const globals = globalThis as typeof globalThis & { healthCheckRun?: Promise<void>; healthMonitorStarted?: boolean };
+import { getDatabase } from "./cloudflare";
+import type { D1Database } from "@cloudflare/workers-types";
 
 export async function probe(service: Pick<Service, "url">): Promise<HealthResult> {
   const started = performance.now();
@@ -18,41 +19,42 @@ export async function probe(service: Pick<Service, "url">): Promise<HealthResult
   } finally { clearTimeout(timeout); }
 }
 
-export async function checkServices(ids?: string[]): Promise<void> {
-  if (globals.healthCheckRun) {
-    await globals.healthCheckRun;
-    if (!ids) return;
-    return checkServices(ids);
-  }
-  const task = (async () => {
-    const { services } = await readStore();
+export async function checkServices(ids?: string[], database?: D1Database): Promise<void> {
+    const db = database ?? await getDatabase();
+    const { services } = await readStore(db);
     const pending = services.filter(service => !ids || ids.includes(service.id));
+    const results: Array<{ service: Service; result: HealthResult }> = [];
     let cursor = 0;
     await Promise.all(Array.from({length: Math.min(4, pending.length)}, async () => {
       while (cursor < pending.length) {
         const service = pending[cursor++];
         const result = await probe(service);
-        await mutateStore(state => {
+        results.push({ service, result });
+      }
+    }));
+    if (!results.length) return;
+    await mutateStore(state => {
+      for (const { service, result } of results) {
           const current = state.services.find(item => item.id === service.id);
-          if (current?.revision === service.revision) {
+          if (current?.revision === service.revision && (!current.result.checkedAt || current.result.checkedAt < result.checkedAt!)) {
             current.result = result;
             current.history = recordHealth(current.history ?? [], result);
             current.timeline = recordTimelineHealth(current.timeline ?? [], result);
           }
-        });
       }
-    }));
-  })();
-  globals.healthCheckRun = task;
-  try { await task; } finally { if (globals.healthCheckRun === task) globals.healthCheckRun = undefined; }
+    }, db);
 }
 
-export function startMonitor() {
-  if (globals.healthMonitorStarted) return;
-  globals.healthMonitorStarted = true;
-  const tick = async () => {
-    try { await checkServices(); } catch (error) { console.error("Health monitor failed:", error instanceof Error ? error.message : "unknown error"); }
-    setTimeout(tick, 30000).unref();
-  };
-  setTimeout(tick, 1000).unref();
+export async function scheduledCheck(db: D1Database): Promise<void> {
+  const owner = crypto.randomUUID();
+  const now = Date.now();
+  const lease = await db.prepare(`INSERT INTO monitor_lease (id, owner, expires_at) VALUES (1, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET owner = excluded.owner, expires_at = excluded.expires_at
+    WHERE monitor_lease.expires_at <= ?`).bind(owner, now + 180000, now).run();
+  if (!lease.meta.changes) return;
+  try {
+    await checkServices(undefined, db);
+  } finally {
+    await db.prepare("DELETE FROM monitor_lease WHERE id = 1 AND owner = ?").bind(owner).run();
+  }
 }

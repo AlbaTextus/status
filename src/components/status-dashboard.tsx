@@ -14,7 +14,7 @@ export function StatusDashboard({initial}: {initial: PublicState}) {
   const [data,setData] = useState(initial);
   const [error,setError] = useState("");
   const [loading,setLoading] = useState(false);
-  async function refresh() { setLoading(true); try { const response = await fetch("/api/status?refresh=1",{cache:"no-store"}); if(!response.ok) throw new Error(); setData(await response.json()); setError(""); } catch { setError("暂时无法获取最新状态，以下为上次成功读取的结果。"); } finally {setLoading(false);} }
+  async function refresh() { setLoading(true); try { const response = await fetch("/api/status",{cache:"no-store"}); if(!response.ok) throw new Error(); setData(await response.json()); setError(""); } catch { setError("暂时无法获取最新状态，以下为上次成功读取的结果。"); } finally {setLoading(false);} }
   useEffect(() => { let active=true; const controller=new AbortController(); const timer=setInterval(async()=>{try {const response=await fetch("/api/status",{cache:"no-store",signal:controller.signal}); if(!response.ok) throw new Error();const next:PublicState=await response.json();if(active){setData(next);setError("");}}catch{if(active)setError("暂时无法获取最新状态，以下为上次成功读取的结果。");}},10000);return()=>{active=false;controller.abort();clearInterval(timer);};},[]);
   const aggregate = data.services.some(s=>s.result.status==="error") ? "error" : data.services.some(s=>s.result.status==="maintenance") ? "maintenance" : data.services.some(s=>s.result.status==="unknown") || !data.services.length ? "unknown" : "operational";
   const activeIncidents = data.incidents.filter(incident=>incident.published&&!incident.resolved);

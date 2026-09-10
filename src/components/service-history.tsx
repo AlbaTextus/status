@@ -1,7 +1,6 @@
 "use client";
 
 import { Check, CircleHelp, TriangleAlert, X } from "lucide-react";
-import { motion } from "framer-motion";
 import { cn } from "cn";
 import { availability, shiftTimelineSlot, timelineKey, timelineStatus } from "@/lib/history";
 import { statusLabels, type PublicService } from "@/lib/types";
@@ -24,7 +23,7 @@ export function ServiceHistory({ services, now }: { services: PublicService[]; n
       const percentageLevel = score === null ? "unknown" : score > 66 ? "green" : score >= 34 ? "yellow" : "red";
       const Icon = { operational: Check, maintenance: TriangleAlert, error: X, unknown: CircleHelp }[service.result.status];
       const buckets = new Map(history.map(slice => [slice.slot, slice]));
-      return <motion.section layout className="history-service" key={service.id} aria-label={`${service.name} 状态历史`}>
+      return <section className="history-service" key={service.id} aria-label={`${service.name} 状态历史`}>
         <div className="history-service-heading"><div className="history-service-name">
           <Tooltip><TooltipTrigger render={<span tabIndex={0} className={cn("history-status-icon", `history-${service.result.status}`)} aria-label={statusLabels[service.result.status]} />}><Icon aria-hidden="true" /></TooltipTrigger><TooltipContent>{statusLabels[service.result.status]}</TooltipContent></Tooltip>
           <h3>{service.name}</h3>
@@ -37,7 +36,7 @@ export function ServiceHistory({ services, now }: { services: PublicService[]; n
             return <Tooltip key={slot}><TooltipTrigger render={<button type="button" className={cn("history-bar", `history-${status}`)} aria-label={label} />} /><TooltipContent><div><p>{label}</p>{bucket && <p>正常 {bucket.operational} 次 · 维护 {bucket.maintenance} 次 · 异常 {bucket.error} 次</p>}</div></TooltipContent></Tooltip>;
           })}
         </div>
-      </motion.section>;
+      </section>;
     })}
   </section></TooltipProvider>;
 }
