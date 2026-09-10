@@ -97,6 +97,8 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
   const outageDuration = Math.max(incidentEnd - incidentStart, 15 * 60 * 1000);
   const effectiveColor = resolveIncidentColor(incident);
   const isMaintenance = effectiveColor === "yellow" || incident.title.includes("维护");
+  const oldestUpdate = incident.updates.length > 0 ? incident.updates[incident.updates.length - 1] : null;
+  const initialWasMaintenance = isMaintenance || (oldestUpdate ? (oldestUpdate.label.includes("维护") || oldestUpdate.message.includes("维护")) : false);
 
   // Calculate segment percentage proportions
   let prePct: number;
@@ -352,63 +354,66 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                           </div>
                           <div className="affected-tooltip-status text-(--success)">
                             <CheckCircle2 className="size-3.5 shrink-0" />
-                            <span>正常运行 · {isMaintenance ? "维护前" : "故障前"}</span>
+                            <span>正常运行 · {initialWasMaintenance ? "维护前" : "故障前"}</span>
                           </div>
                         </div>
                       </TooltipContent>
                     </Tooltip>
 
                     {/* Outage phases: RED (outage), YELLOW (monitoring), etc. */}
-                    {outagePhases.map((phase, idx) => (
-                      <Tooltip key={phase.id}>
-                        <TooltipTrigger
-                          render={
-                            <button
-                              type="button"
-                              className={cn(
-                                "affected-bar-segment relative",
-                                phase.status === "outage" && "segment-outage",
-                                phase.status === "monitoring" && "segment-degraded",
-                                phase.status === "neutral" && "segment-unknown"
-                              )}
-                              style={{ width: `${phase.pct}%` }}
-                              aria-label={`${phase.label}: ${formatTooltipRange(phase.start, phase.end, isOngoing && idx === outagePhases.length - 1)}`}
-                            />
-                          }
-                        />
-                        <TooltipContent>
-                          <div className="affected-tooltip-body">
-                            <div className="affected-tooltip-time">
-                              {formatTooltipRange(
-                                phase.start,
-                                phase.end,
-                                isOngoing && idx === outagePhases.length - 1
-                              )}
-                            </div>
-                            <div
-                              className={cn(
-                                "affected-tooltip-status",
-                                phase.status === "outage" && "text-(--outage)",
-                                phase.status === "monitoring" && "text-(--warning)",
-                                phase.status === "neutral" && "text-muted-foreground"
-                              )}
-                            >
-                              {phase.status === "outage" ? (
-                                <AlertTriangle className="size-3.5 shrink-0" />
-                              ) : isMaintenance ? (
-                                <Clock className="size-3.5 shrink-0" />
-                              ) : (
-                                <AlertTriangle className="size-3.5 shrink-0" />
-                              )}
-                              <span>
-                                {phase.status === "outage"
-                                  ? "严重故障"
-                                  : isMaintenance
-                                  ? "计划维护中"
-                                  : "观察与缓解中"}
-                                {phase.label ? ` (${phase.label})` : ""}
-                              </span>
-                            </div>
+                    {outagePhases.map((phase, idx) => {
+                      const isPhaseMaintenance = phase.label?.includes("维护") || (phase.status !== "outage" && isMaintenance);
+
+                      return (
+                        <Tooltip key={phase.id}>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                className={cn(
+                                  "affected-bar-segment relative",
+                                  phase.status === "outage" && "segment-outage",
+                                  phase.status === "monitoring" && "segment-degraded",
+                                  phase.status === "neutral" && "segment-unknown"
+                                )}
+                                style={{ width: `${phase.pct}%` }}
+                                aria-label={`${phase.label}: ${formatTooltipRange(phase.start, phase.end, isOngoing && idx === outagePhases.length - 1)}`}
+                              />
+                            }
+                          />
+                          <TooltipContent>
+                            <div className="affected-tooltip-body">
+                              <div className="affected-tooltip-time">
+                                {formatTooltipRange(
+                                  phase.start,
+                                  phase.end,
+                                  isOngoing && idx === outagePhases.length - 1
+                                )}
+                              </div>
+                              <div
+                                className={cn(
+                                  "affected-tooltip-status",
+                                  phase.status === "outage" && "text-(--outage)",
+                                  phase.status === "monitoring" && "text-(--warning)",
+                                  phase.status === "neutral" && "text-muted-foreground"
+                                )}
+                              >
+                                {phase.status === "outage" ? (
+                                  <AlertTriangle className="size-3.5 shrink-0" />
+                                ) : isPhaseMaintenance ? (
+                                  <Clock className="size-3.5 shrink-0" />
+                                ) : (
+                                  <AlertTriangle className="size-3.5 shrink-0" />
+                                )}
+                                <span>
+                                  {phase.status === "outage"
+                                    ? "严重故障"
+                                    : isPhaseMaintenance
+                                    ? "计划维护中"
+                                    : "观察与缓解中"}
+                                  {phase.label ? ` (${phase.label})` : ""}
+                                </span>
+                              </div>
                             {phase.message && (
                               <div className="text-xs text-muted-foreground line-clamp-2 max-w-[260px] whitespace-pre-wrap">
                                 {phase.message}
@@ -417,7 +422,8 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                           </div>
                         </TooltipContent>
                       </Tooltip>
-                    ))}
+                    );
+                  })}
 
                     {/* Post-incident segment (only when incident is resolved) */}
                     {!isOngoing && postPct > 0 && (

@@ -54,34 +54,62 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
             } else {
               const failingMs = Date.now() - new Date(current.failingSince).getTime();
               if (failingMs >= FIVE_MINUTES_MS) {
-                const hasActiveIncident = state.incidents.some(
-                  inc => inc.serviceId === current.id && !inc.resolved && inc.published
-                );
                 const alreadyPublishedForEpisode = current.lastAutoIncidentAt &&
                   new Date(current.lastAutoIncidentAt).getTime() >= new Date(current.failingSince).getTime();
 
-                if (!hasActiveIncident && !alreadyPublishedForEpisode) {
-                  const autoIncident: Incident = {
-                    id: crypto.randomUUID(),
-                    title: `${current.name} 服务异常`,
-                    color: "red",
-                    serviceId: current.id,
-                    resolved: false,
-                    published: true,
-                    publishedAt: nowIso,
-                    updatedAt: nowIso,
-                    updates: [
-                      {
+                if (!alreadyPublishedForEpisode) {
+                  const activeIncident = state.incidents.find(
+                    inc => inc.serviceId === current.id && !inc.resolved && inc.published
+                  );
+
+                  if (activeIncident) {
+                    const isMaintenanceIncident =
+                      activeIncident.id === current.autoMaintenanceIncidentId ||
+                      activeIncident.color === "yellow" ||
+                      activeIncident.title.includes("维护");
+
+                    if (isMaintenanceIncident) {
+                      // 衔接维护的发布：在同一个事态里发布，并更换相对应的标题
+                      activeIncident.title = activeIncident.title.includes("维护")
+                        ? activeIncident.title.replace(/计划维护|维护/, "服务异常")
+                        : `${current.name} 服务异常`;
+                      activeIncident.color = "red";
+                      activeIncident.updatedAt = nowIso;
+                      activeIncident.updates.unshift({
                         id: crypto.randomUUID(),
                         label: "服务异常",
-                        message: `检测到 ${current.name} 持续异常已超过 5 分钟（${result.message}），系统已自动发布红色预警事态。`,
+                        message: `检测到 ${current.name} 在维护期间出现异常并已持续超过 5 分钟（${result.message}），事态已升级为红色预警。`,
                         createdAt: nowIso,
                         status: "outage",
-                      },
-                    ],
-                  };
-                  state.incidents.unshift(autoIncident);
-                  current.lastAutoIncidentAt = nowIso;
+                      });
+
+                      current.lastAutoIncidentAt = nowIso;
+                      current.autoMaintenanceIncidentId = activeIncident.id;
+                    }
+                  } else {
+                    const autoIncident: Incident = {
+                      id: crypto.randomUUID(),
+                      title: `${current.name} 服务异常`,
+                      color: "red",
+                      serviceId: current.id,
+                      resolved: false,
+                      published: true,
+                      publishedAt: nowIso,
+                      updatedAt: nowIso,
+                      updates: [
+                        {
+                          id: crypto.randomUUID(),
+                          label: "服务异常",
+                          message: `检测到 ${current.name} 持续异常已超过 5 分钟（${result.message}），系统已自动发布红色预警事态。`,
+                          createdAt: nowIso,
+                          status: "outage",
+                        },
+                      ],
+                    };
+                    state.incidents.unshift(autoIncident);
+                    current.lastAutoIncidentAt = nowIso;
+                    current.autoMaintenanceIncidentId = autoIncident.id;
+                  }
                 }
               }
             }
@@ -133,24 +161,25 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
             }
           }
 
-          // 3. Operational recovery tracking (检测到正常服务后持续满 5 分钟自动取消维护事态)
+          // 3. Operational recovery tracking (检测到正常服务后持续满 5 分钟自动取消维护/异常事态)
           if (result.status === "operational") {
-            const activeMaintenanceIncident = current.autoMaintenanceIncidentId
+            const activeIncidentToResolve = current.autoMaintenanceIncidentId
               ? state.incidents.find(inc => inc.id === current.autoMaintenanceIncidentId && !inc.resolved)
-              : null;
+              : state.incidents.find(inc => inc.serviceId === current.id && !inc.resolved && (inc.title.includes("服务异常") || inc.title.includes("计划维护")));
 
-            if (activeMaintenanceIncident) {
+            if (activeIncidentToResolve) {
               if (!current.maintenanceRecoveringSince) {
                 current.maintenanceRecoveringSince = result.checkedAt ?? nowIso;
               } else {
                 const recoveringMs = Date.now() - new Date(current.maintenanceRecoveringSince).getTime();
                 if (recoveringMs >= FIVE_MINUTES_MS) {
-                  activeMaintenanceIncident.resolved = true;
-                  activeMaintenanceIncident.updatedAt = nowIso;
-                  activeMaintenanceIncident.updates.unshift({
+                  activeIncidentToResolve.resolved = true;
+                  activeIncidentToResolve.updatedAt = nowIso;
+                  const isRed = activeIncidentToResolve.color === "red" || activeIncidentToResolve.title.includes("异常");
+                  activeIncidentToResolve.updates.unshift({
                     id: crypto.randomUUID(),
                     label: "已恢复",
-                    message: `检测到 ${current.name} 服务已持续恢复正常运行满 5 分钟，维护事态已自动取消并恢复。`,
+                    message: `检测到 ${current.name} 服务已持续恢复正常运行满 5 分钟，${isRed ? "服务异常事态" : "维护事态"}已自动取消并恢复。`,
                     createdAt: nowIso,
                     status: "resolved",
                   });
