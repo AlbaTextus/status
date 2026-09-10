@@ -258,3 +258,95 @@
   .editor-options { grid-template-columns: 1fr; }
   .event-title { flex-wrap: wrap; }
 }
+
+/* Affected Components Card */
+.affected-components-card { margin-top: 24px; background: var(--card); }
+.affected-card-header { padding: 16px 20px; border-bottom: 1px solid var(--divider); }
+.affected-card-header h2 { font-size: 16px; font-weight: 550; letter-spacing: -0.2px; }
+.affected-card-body { padding: 20px 20px 24px; }
+.affected-timeline-axis-container { position: relative; height: 22px; margin-bottom: 14px; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; user-select: none; }
+.axis-tick-wrapper { position: absolute; top: 0; white-space: nowrap; pointer-events: none; }
+.axis-tick-label { display: inline-block; font-size: 11px; }
+.axis-label-start { transform: translateX(0); }
+.axis-label-mid { transform: translateX(-50%); }
+.axis-label-end { transform: translateX(-50%); }
+.axis-label-now { transform: translateX(-100%); font-weight: 600; color: var(--outage); }
+.affected-components-list { display: flex; flex-direction: column; gap: 20px; }
+.affected-component-row { display: flex; flex-direction: column; gap: 8px; }
+.affected-component-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.affected-component-name { font-size: 15px; font-weight: 600; color: var(--foreground); }
+.affected-component-badge { display: inline-flex; align-items: center; font-size: 12px; color: var(--muted-foreground); padding: 2px 6px; border-radius: 4px; }
+.affected-component-badge:hover { background: var(--muted); }
+.affected-detail-box { padding: 10px 14px; border-radius: 6px; background: var(--muted); border: 1px solid var(--border); font-size: 12px; display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.detail-item { display: flex; align-items: center; gap: 8px; }
+.detail-label { color: var(--muted-foreground); font-size: 11px; }
+.detail-value { color: var(--foreground); font-size: 12px; }
+.affected-bar-track { display: flex; height: 16px; width: 100%; border-radius: 4px; overflow: hidden; background: var(--muted); gap: 1px; position: relative; }
+.affected-bar-segment { height: 100%; border: 0; padding: 0; cursor: pointer; transition: opacity 0.15s ease; border-radius: 1px; }
+.affected-bar-segment:hover { opacity: 0.85; }
+.inner-divider-line { position: absolute; top: 0; bottom: 0; width: 1.5px; background: rgba(255, 255, 255, 0.45); pointer-events: none; }
+.segment-operational { background: var(--success); }
+.segment-degraded { background: var(--warning); }
+.segment-outage { background: var(--outage); }
+.segment-unknown { background: var(--border); }
+.affected-tooltip-body { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
+.affected-tooltip-time { font-size: 11px; opacity: 0.85; font-variant-numeric: tabular-nums; }
+.affected-tooltip-status { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 550; }
+
+/* Incident Detail Page & Updates Card */
+.incident-nav-bar { margin-bottom: 16px; }
+.incident-header-section { margin-bottom: 24px; }
+.incident-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.incident-title-row h1 { font-size: 22px; font-weight: 650; letter-spacing: -0.4px; }
+.incident-lede-text { font-size: 14px; line-height: 1.7; color: var(--muted-foreground); margin-top: 8px; }
+.incident-updates-card { margin-top: 24px; background: var(--card); }
+.updates-card-header { padding: 16px 20px; border-bottom: 1px solid var(--divider); }
+.updates-card-header h2 { font-size: 16px; font-weight: 550; }
+.updates-timeline-list { padding: 24px 20px 24px; display: flex; flex-direction: column; gap: 0; }
+.update-timeline-item { display: grid; grid-template-columns: 24px 1fr; gap: 12px; position: relative; }
+.update-timeline-track { display: flex; flex-direction: column; align-items: center; padding-top: 6px; }
+.update-node-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; z-index: 1; }
+.node-resolved { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 20%, transparent); }
+.node-monitoring { background: var(--outage); box-shadow: 0 0 0 3px color-mix(in srgb, var(--outage) 20%, transparent); }
+.node-neutral { background: var(--muted-foreground); }
+.update-node-line { width: 2px; flex: 1; min-height: 32px; background: var(--border); margin-block: 4px; }
+.update-timeline-content { padding-bottom: 24px; min-width: 0; }
+.update-timeline-item:last-child .update-timeline-content { padding-bottom: 0; }
+.update-timeline-label { font-size: 15px; font-weight: 600; line-height: 1.4; color: var(--foreground); margin-bottom: 6px; }
+.label-resolved { color: var(--success); }
+.label-monitoring { color: var(--outage); }
+.label-neutral { color: var(--foreground); }
+.update-timeline-message { font-size: 14px; line-height: 1.6; color: var(--foreground); white-space: pre-wrap; word-break: break-word; }
+.update-timeline-time { display: block; margin-top: 8px; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+
+
+/* Incidents Index Page */
+.incidents-index-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 28px; flex-wrap: wrap; }
+.incidents-index-header h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.5px; }
+.incidents-index-header p { color: var(--muted-foreground); font-size: 13px; margin-top: 6px; line-height: 1.6; }
+.history-link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted-foreground); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; background: var(--card); transition: all 0.15s; }
+.history-link-btn:hover { background: var(--muted); color: var(--foreground); }
+.section-title-tag { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+.section-title-tag h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.active-incidents-stack { display: flex; flex-direction: column; gap: 20px; }
+.active-incident-card { border: 1px solid color-mix(in srgb, var(--outage) 40%, transparent); border-radius: 8px; padding: 20px; background: var(--card); box-shadow: 0 2px 4px #0000000a; }
+.active-incident-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.active-incident-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.active-incident-title { font-size: 16px; font-weight: 600; color: var(--foreground); }
+.active-incident-title:hover { text-decoration: underline; }
+.active-incident-time { font-size: 12px; color: var(--muted-foreground); }
+.active-incident-latest-update { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--divider); font-size: 13px; line-height: 1.6; }
+.latest-tag { color: var(--muted-foreground); }
+.read-more-link { display: inline-flex; align-items: center; margin-left: 8px; color: var(--foreground); font-weight: 500; }
+.read-more-link:hover { text-decoration: underline; }
+.past-incidents-list { background: var(--card); overflow: hidden; }
+.past-incident-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--divider); transition: background 0.15s; }
+.past-incident-item:last-child { border-bottom: 0; }
+.past-incident-item:hover { background: var(--muted); }
+.past-incident-main { flex: 1; min-width: 0; }
+.past-incident-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.past-incident-title { font-size: 15px; font-weight: 600; color: var(--foreground); }
+.service-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); }
+.past-incident-summary { font-size: 13px; color: var(--muted-foreground); margin-bottom: 6px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.past-incident-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted-foreground); }
+.past-incident-arrow { color: var(--muted-foreground); flex-shrink: 0; }

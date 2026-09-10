@@ -20,7 +20,7 @@ export function ServiceHistory({ services, now }: { services: PublicService[]; n
       const selected = history.filter(slice => slice.slot >= start && slice.slot <= end);
       const percentage = availability(selected);
       const score = percentage === null ? null : Number.parseFloat(percentage);
-      const percentageLevel = score === null ? "unknown" : score > 66 ? "green" : score >= 34 ? "yellow" : "red";
+      const percentageLevel = service.result.status === "error" ? "red" : service.result.status === "maintenance" ? "yellow" : score === null ? "unknown" : score >= 99 ? "green" : score >= 90 ? "yellow" : "red";
       const Icon = { operational: Check, maintenance: TriangleAlert, error: X, unknown: CircleHelp }[service.result.status];
       const buckets = new Map(history.map(slice => [slice.slot, slice]));
       return <section className="history-service" key={service.id} aria-label={`${service.name} 状态历史`}>
