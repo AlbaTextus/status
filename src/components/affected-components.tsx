@@ -4,7 +4,9 @@ import * as React from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { HealthLabel } from "./health-label";
-import { statusLabels, type Incident, type PublicService, type HealthStatus } from "@/lib/types";
+import { statusLabels, type Incident, type PublicService, type HealthStatus, type UpdateStatusKind } from "@/lib/types";
+import { resolveUpdateStatus } from "@/lib/incident-status";
+import { cn } from "cn";
 
 interface AffectedComponentsProps {
   incident: Incident;
@@ -14,23 +16,23 @@ interface AffectedComponentsProps {
 
 function formatFullDate(dateValue: string | number): string {
   const date = new Date(dateValue);
-  return date.toLocaleString("en-US", {
-    month: "short",
+  return date.toLocaleString("zh-CN", {
+    month: "numeric",
     day: "numeric",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hour12: false,
     timeZone: "Asia/Shanghai",
   });
 }
 
 function formatTimeOnly(dateValue: string | number): string {
   const date = new Date(dateValue);
-  return date.toLocaleString("en-US", {
+  return date.toLocaleString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hour12: false,
     timeZone: "Asia/Shanghai",
   });
 }
@@ -120,16 +122,116 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
 
   const totalWindow = windowEnd - windowStart;
 
-  // Intermediate update ticks (excluding start and end)
-  const intermediateUpdates = updateTimes
-    .filter(t => t > incidentStart + 60000 && t < incidentEnd - 60000)
-    .map(t => ({
-      time: t,
-      leftPct: Math.max(prePct + 2, Math.min(prePct + outagePct - 2, ((t - windowStart) / totalWindow) * 100)),
-    }));
+  // Determine phases during the outage period (incidentStart to incidentEnd)
+  interface OutagePhase {
+    id: string;
+    start: number;
+    end: number;
+    status: UpdateStatusKind;
+    label: string;
+    message?: string;
+    pct: number;
+  }
 
-  const isRed = incident.color === "red";
-  const outageSeverityLabel = isRed ? "Major outage" : "Partial outage";
+  // 1. Chronologically sort all updates
+  const sortedUpdates = [...incident.updates]
+    .map((u, i) => {
+      const time = Date.parse(u.createdAt);
+      return {
+        update: u,
+        time: Number.isNaN(time) ? pubTime : time,
+        status: resolveUpdateStatus(u, incident, i, incident.updates.length),
+      };
+    })
+    .sort((a, b) => a.time - b.time);
+
+  // 2. Separate active (pre-resolution) updates from resolution
+  const activeUpdates = sortedUpdates.filter((item) => item.status !== "resolved");
+  const resolveUpdate = sortedUpdates.find((item) => item.status === "resolved");
+  const actualOutageEnd = resolveUpdate && !isOngoing ? resolveUpdate.time : incidentEnd;
+
+  const rawPhases: Array<{
+    id: string;
+    start: number;
+    end: number;
+    status: UpdateStatusKind;
+    label: string;
+    message?: string;
+    duration: number;
+  }> = [];
+
+  if (activeUpdates.length === 0) {
+    const fallbackStatus: UpdateStatusKind = incident.color === "red" ? "outage" : "monitoring";
+    rawPhases.push({
+      id: "phase-default",
+      start: incidentStart,
+      end: actualOutageEnd,
+      status: fallbackStatus,
+      label: fallbackStatus === "outage" ? "严重故障" : "性能降级 / 关注中",
+      duration: Math.max(actualOutageEnd - incidentStart, 60000),
+    });
+  } else {
+    for (let i = 0; i < activeUpdates.length; i++) {
+      const curr = activeUpdates[i];
+      const next = activeUpdates[i + 1];
+      const pStart = i === 0 ? Math.min(curr.time, incidentStart) : curr.time;
+      const pEnd = next ? next.time : actualOutageEnd;
+      const duration = Math.max(pEnd - pStart, 1000);
+      rawPhases.push({
+        id: curr.update.id || `phase-${i}`,
+        start: pStart,
+        end: pEnd,
+        status: curr.status,
+        label: curr.update.label || (curr.status === "outage" ? "严重故障" : "性能降级 / 关注中"),
+        message: curr.update.message,
+        duration,
+      });
+    }
+  }
+
+  // Proportional widths within outagePct with guaranteed minimum width for each phase
+  const totalOutageDuration = rawPhases.reduce((acc, p) => acc + p.duration, 0) || 1;
+  const numPhases = rawPhases.length;
+
+  const MIN_SHARE = numPhases > 1 ? 0.15 : 1.0;
+  const totalMinShare = Math.min(0.6, numPhases * MIN_SHARE);
+  const remainingShare = Math.max(0, 1.0 - totalMinShare);
+
+  const outagePhases: OutagePhase[] = rawPhases.map((phase) => {
+    const rawRatio = phase.duration / totalOutageDuration;
+    const share = numPhases > 1 ? MIN_SHARE + remainingShare * rawRatio : 1.0;
+    const pct = Number((share * outagePct).toFixed(2));
+    return {
+      ...phase,
+      pct,
+    };
+  });
+
+  // Normalize so sum of outagePhases pct matches outagePct
+  const actualOutageSum = outagePhases.reduce((acc, p) => acc + p.pct, 0);
+  if (outagePhases.length > 0 && actualOutageSum > 0) {
+    const diff = outagePct - actualOutageSum;
+    outagePhases[outagePhases.length - 1].pct = Number(
+      (outagePhases[outagePhases.length - 1].pct + diff).toFixed(2)
+    );
+  }
+
+  // Intermediate update ticks (excluding start and end)
+  const intermediateUpdates: Array<{ time: number; leftPct: number }> = [];
+  let runningLeft = prePct;
+  for (let i = 0; i < outagePhases.length - 1; i++) {
+    runningLeft += outagePhases[i].pct;
+    const nextPhase = outagePhases[i + 1];
+    if (
+      nextPhase.start > incidentStart + 60000 &&
+      nextPhase.start < incidentEnd - 60000
+    ) {
+      intermediateUpdates.push({
+        time: nextPhase.start,
+        leftPct: runningLeft,
+      });
+    }
+  }
 
   return (
     <TooltipProvider delay={80}>
@@ -256,47 +358,58 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                       </TooltipContent>
                     </Tooltip>
 
-                    {/* Outage segment: RED or ORANGE */}
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            className={`affected-bar-segment ${isRed ? "segment-outage" : "segment-degraded"} relative`}
-                            style={{ width: `${outagePct}%` }}
-                            aria-label={`Outage: ${formatTooltipRange(incidentStart, incidentEnd, isOngoing)}`}
-                          >
-                            {/* Inner vertical update dividers */}
-                            {intermediateUpdates.map((item, idx) => {
-                              const relPct = ((item.leftPct - prePct) / outagePct) * 100;
-                              return (
-                                <span
-                                  key={idx}
-                                  className="inner-divider-line"
-                                  style={{ left: `${relPct}%` }}
-                                  aria-hidden="true"
-                                />
-                              );
-                            })}
-                          </button>
-                        }
-                      />
-                      <TooltipContent>
-                        <div className="affected-tooltip-body">
-                          <div className="affected-tooltip-time">
-                            {formatTooltipRange(incidentStart, incidentEnd, isOngoing)}
+                    {/* Outage phases: RED (outage), YELLOW (monitoring), etc. */}
+                    {outagePhases.map((phase, idx) => (
+                      <Tooltip key={phase.id}>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              className={cn(
+                                "affected-bar-segment relative",
+                                phase.status === "outage" && "segment-outage",
+                                phase.status === "monitoring" && "segment-degraded",
+                                phase.status === "neutral" && "segment-unknown"
+                              )}
+                              style={{ width: `${phase.pct}%` }}
+                              aria-label={`${phase.label}: ${formatTooltipRange(phase.start, phase.end, isOngoing && idx === outagePhases.length - 1)}`}
+                            />
+                          }
+                        />
+                        <TooltipContent>
+                          <div className="affected-tooltip-body">
+                            <div className="affected-tooltip-time">
+                              {formatTooltipRange(
+                                phase.start,
+                                phase.end,
+                                isOngoing && idx === outagePhases.length - 1
+                              )}
+                            </div>
+                            <div
+                              className={cn(
+                                "affected-tooltip-status",
+                                phase.status === "outage" && "text-(--outage)",
+                                phase.status === "monitoring" && "text-(--warning)",
+                                phase.status === "neutral" && "text-muted-foreground"
+                              )}
+                            >
+                              <AlertTriangle className="size-3.5 shrink-0" />
+                              <span>
+                                {phase.status === "outage"
+                                  ? "Major outage · 严重故障"
+                                  : "Monitoring / Degraded · 观察与缓解中"}
+                                {phase.label ? ` (${phase.label})` : ""}
+                              </span>
+                            </div>
+                            {phase.message && (
+                              <div className="text-xs text-muted-foreground line-clamp-2 max-w-[260px] whitespace-pre-wrap">
+                                {phase.message}
+                              </div>
+                            )}
                           </div>
-                          <div
-                            className={`affected-tooltip-status ${isRed ? "text-(--outage)" : "text-(--warning)"}`}
-                          >
-                            <AlertTriangle className="size-3.5 shrink-0" />
-                            <span>
-                              {outageSeverityLabel} · {isOngoing ? "故障持续中" : "故障期间"}
-                            </span>
-                          </div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
 
                     {/* Post-incident segment (only when incident is resolved) */}
                     {!isOngoing && postPct > 0 && (
