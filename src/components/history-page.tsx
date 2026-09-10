@@ -81,23 +81,62 @@ export function HistoryPage({ data }: { data: PublicState }) {
     };
   }, [dateRange, earliest]);
 
-  const visible = published
-    .filter(
-      (item) =>
-        dateOf(item) >= start &&
-        dateOf(item) <= end &&
-        (service === "all" || (service === "global" ? !item.serviceId : item.serviceId === service))
-    )
-    .sort((a, b) => (b.publishedAt ?? b.updatedAt).localeCompare(a.publishedAt ?? a.updatedAt));
+  const visibleIncidents = useMemo(() => {
+    return published.filter((item) => {
+      const d = dateOf(item);
+      const inRange = d >= start && d <= end;
+      const inService = service === "all" || (service === "global" ? !item.serviceId : item.serviceId === service);
+      return inRange && inService;
+    });
+  }, [published, start, end, service]);
 
-  const months = new Map<string, Map<string, Incident[]>>();
-  for (const item of visible) {
-    const date = dateOf(item);
-    const month = date.slice(0, 7);
-    if (!months.has(month)) months.set(month, new Map());
-    const days = months.get(month)!;
-    days.set(date, [...(days.get(date) ?? []), item]);
-  }
+  const incidentsByDate = useMemo(() => {
+    const map = new Map<string, Incident[]>();
+    for (const item of visibleIncidents) {
+      const d = dateOf(item);
+      if (!map.has(d)) {
+        map.set(d, []);
+      }
+      map.get(d)!.push(item);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => (b.publishedAt ?? b.updatedAt).localeCompare(a.publishedAt ?? a.updatedAt));
+    }
+    return map;
+  }, [visibleIncidents]);
+
+  const months = useMemo(() => {
+    const todayStr = formatToYMD(today);
+    const effectiveEnd = end > todayStr ? todayStr : end;
+    let effectiveStart = start;
+    if (!dateRange || (!dateRange.from && !dateRange.to)) {
+      const fallbackStart = formatToYMD(subDays(today, 29));
+      effectiveStart = earliest ? (earliest < fallbackStart ? earliest : fallbackStart) : fallbackStart;
+    }
+    if (effectiveStart > effectiveEnd) {
+      effectiveStart = effectiveEnd;
+    }
+
+    const res = new Map<string, Map<string, Incident[]>>();
+    let curr = parseYMD(effectiveEnd);
+    const minDate = parseYMD(effectiveStart);
+
+    let count = 0;
+    while (curr >= minDate && count < 366) {
+      count++;
+      const dStr = formatToYMD(curr);
+      const mStr = dStr.slice(0, 7);
+      if (!res.has(mStr)) {
+        res.set(mStr, new Map());
+      }
+      const monthDays = res.get(mStr)!;
+      monthDays.set(dStr, incidentsByDate.get(dStr) ?? []);
+
+      curr = new Date(curr.getFullYear(), curr.getMonth(), curr.getDate() - 1);
+    }
+
+    return res;
+  }, [end, today, start, dateRange, earliest, incidentsByDate]);
 
   const isPresetDays = (days: number) => {
     if (!dateRange?.from || !dateRange?.to) return false;
@@ -293,26 +332,33 @@ export function HistoryPage({ data }: { data: PublicState }) {
                       </span>
                     </div>
                     <div className="archive-events">
-                      {items.map((item) => (
-                        <Link
-                          key={item.id}
-                          href={`/incidents/${item.id}`}
-                          className={`archive-event archive-${item.color ?? "yellow"}`}
-                        >
+                      {items.length > 0 ? (
+                        items.map((item) => (
+                          <Link
+                            key={item.id}
+                            href={`/incidents/${item.id}`}
+                            className={`archive-event archive-${item.color ?? "yellow"}`}
+                          >
+                            <div className="archive-event-heading">
+                              <h3>{item.title}</h3>
+                              <time dateTime={item.publishedAt ?? item.updatedAt}>
+                                {new Date(item.publishedAt ?? item.updatedAt).toLocaleTimeString("zh-CN", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: false,
+                                  timeZone: "Asia/Shanghai",
+                                })}
+                              </time>
+                            </div>
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="archive-event archive-operational">
                           <div className="archive-event-heading">
-                            <h3>{item.title}</h3>
-                            <time dateTime={item.publishedAt ?? item.updatedAt}>
-                              {new Date(item.publishedAt ?? item.updatedAt).toLocaleTimeString("zh-CN", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: false,
-                                timeZone: "Asia/Shanghai",
-                              })}
-                            </time>
+                            <span className="archive-operational-text">无事态</span>
                           </div>
-                          <p>{item.updates[0]?.message}</p>
-                        </Link>
-                      ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
