@@ -26,7 +26,6 @@ export function HistoryPage({data}: {data:PublicState}) {
     return `${d.getUTCFullYear()}年${d.getUTCMonth()+1}月`;
   };
   return <><StatusHeader/><div className="status-shell"><main>
-    <nav className="archive-breadcrumb" aria-label="面包屑"><Link href="/">AlbaTextus</Link><span>/</span><span>历史记录</span></nav>
     <div className="archive-toolbar"><div className="archive-period"><h1>历史记录</h1><Button variant="ghost" size="icon-sm" aria-label="前 90 天" disabled={!earliest||earliest>=start} onClick={()=>setPage(page+1)}><ChevronLeft/></Button><span>{monthLabel(start)} - {monthLabel(end)}</span><Button variant="ghost" size="icon-sm" aria-label="后 90 天" disabled={page===0} onClick={()=>setPage(page-1)}><ChevronRight/></Button></div>
       <div className="w-[180px]">
         <Select aria-label="筛选服务" value={service} onValueChange={val=>setService(val??"all")}>
