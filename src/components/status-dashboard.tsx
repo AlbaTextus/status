@@ -22,15 +22,64 @@ export function StatusDashboard({initial}: {initial: PublicState}) {
   return <MotionConfig reducedMotion="user"><StatusHeader onRefresh={refresh} refreshing={loading} /><div className="status-shell"><main>
     <div className="page-heading status-page-heading"><div><h1>服务状态</h1></div></div>
     {error && <Alert variant="destructive" className="mb-5"><AlertTitle>状态读取失败</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-    {activeIncidents.length ? <div className="active-announcements">{activeIncidents.map(incident=>{
-      const service = data.services.find(service=>service.id===incident.serviceId);
-      const incidentColor = resolveIncidentColor(incident);
-      return <section key={incident.id} className={`announcement announcement-${incidentColor}`} aria-label="进行中的公告">
-        <div className="announcement-heading"><TriangleAlert aria-hidden="true"/><h2>{incidentColor==="red"?"当前有服务异常":"当前有服务需要关注"}</h2></div>
-        <div className="announcement-services"><span>{service?.name??"全站公告"}</span></div>
-        <Link href={`/incidents/${incident.id}`} className="announcement-body"><TriangleAlert aria-hidden="true"/><div><h3>{incident.title}</h3><p>{incident.updates[0]?.message}</p><div className="announcement-meta">{incident.updates[0]?.label} · 最近更新 <DisplayTime value={incident.updatedAt}/>{service&&` · 影响 ${service.name}`}</div></div></Link>
-      </section>;
-    })}</div> : <div className={`health-overview health-${aggregate}`}><HealthLabel result={{status:aggregate,code:null,latency:null,checkedAt:null,message:""}} /><span>{aggregate==="operational" ? "所有服务运行正常" : aggregate==="maintenance" ? "部分服务正在维护" : aggregate==="error" ? "部分服务当前不可用" : "正在等待服务检测"}</span></div>}
+    {activeIncidents.length ? (
+      <div className="active-announcements">
+        {(() => {
+          const overallColor = activeIncidents.some(inc => resolveIncidentColor(inc) === "red") ? "red" : "yellow";
+          const affectedServices = Array.from(new Set(
+            activeIncidents.map(inc => {
+              const s = data.services.find(service => service.id === inc.serviceId);
+              return s?.name ?? "全站公告";
+            })
+          ));
+
+          return (
+            <section className={`announcement announcement-${overallColor}`} aria-label="进行中的公告">
+              <div className="announcement-heading">
+                <TriangleAlert aria-hidden="true"/>
+                <h2>{overallColor === "red" ? "当前有服务异常" : "当前有服务需要关注"}</h2>
+              </div>
+              <div className="announcement-services">
+                {affectedServices.map(name => (
+                  <span key={name}>{name}</span>
+                ))}
+              </div>
+              <div className="announcement-list">
+                {activeIncidents.map(incident => {
+                  const service = data.services.find(service => service.id === incident.serviceId);
+                  const incidentColor = resolveIncidentColor(incident);
+
+                  return (
+                    <Link
+                      key={incident.id}
+                      href={`/incidents/${incident.id}`}
+                      className="announcement-body"
+                    >
+                      <TriangleAlert
+                        aria-hidden="true"
+                        style={{ color: incidentColor === "red" ? "var(--outage)" : "var(--warning)" }}
+                      />
+                      <div>
+                        <h3>{incident.title}</h3>
+                        <p>{incident.updates[0]?.message}</p>
+                        <div className="announcement-meta">
+                          {incident.updates[0]?.label} · 最近更新 <DisplayTime value={incident.updatedAt}/>{service && ` · 影响 ${service.name}`}
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })()}
+      </div>
+    ) : (
+      <div className={`health-overview health-${aggregate}`}>
+        <HealthLabel result={{status:aggregate,code:null,latency:null,checkedAt:null,message:""}} />
+        <span>{aggregate==="operational" ? "所有服务运行正常" : aggregate==="maintenance" ? "部分服务正在维护" : aggregate==="error" ? "部分服务当前不可用" : "正在等待服务检测"}</span>
+      </div>
+    )}
     {data.services.length ? <ServiceHistory services={data.services} now={data.generatedAt} /> : <section className="system-panel"><Empty><EmptyHeader><EmptyMedia variant="icon"><Server /></EmptyMedia><EmptyTitle>尚未添加服务</EmptyTitle><EmptyDescription>添加服务后，这里会显示实际检测状态。</EmptyDescription></EmptyHeader></Empty></section>}
     <Link href="/history" className="history-all-link">查看全部事件历史<ArrowUpRight className="size-4"/></Link>
   </main><StatusFooter /></div></MotionConfig>;

@@ -147,10 +147,11 @@
 .announcement-heading { display: flex; align-items: center; gap: 12px; padding: 20px; background: var(--announcement-soft); }
 .announcement-heading h2 { font-size: 18px; font-weight: 500; }
 .announcement svg { flex-shrink: 0; width: 20px; height: 20px; color: var(--announcement-color); }
-.announcement-services { padding: 18px 20px; border-bottom: 1px solid var(--divider); }
+.announcement-services { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 20px; border-bottom: 1px solid var(--divider); }
 .announcement-services span { display: inline-block; padding: 4px 10px; border-radius: 5px; font-size: 14px; background: var(--announcement-soft); color: var(--announcement-text); }
-.announcement-body { display: flex; align-items: flex-start; gap: 12px; padding: 20px; }
+.announcement-body { display: flex; align-items: flex-start; gap: 12px; padding: 20px; transition: background-color 0.15s ease; }
 .announcement-body:hover { background: var(--muted); }
+.announcement-body:not(:last-child) { border-bottom: 1px solid var(--divider); }
 .announcement-body > div { min-width: 0; }
 .announcement-body h3 { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
 .announcement-body p { margin: 10px 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
