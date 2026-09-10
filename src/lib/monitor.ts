@@ -1,5 +1,5 @@
 import { mutateStore, readStore } from "./store";
-import type { HealthResult, Service } from "./types";
+import type { HealthResult, Incident, Service } from "./types";
 import { recordHealth, recordTimelineHealth } from "./history";
 
 import { getDatabase } from "./cloudflare";
@@ -34,13 +34,58 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
     }));
     if (!results.length) return;
     await mutateStore(state => {
+      const nowIso = new Date().toISOString();
+      const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+
       for (const { service, result } of results) {
-          const current = state.services.find(item => item.id === service.id);
-          if (current?.revision === service.revision && (!current.result.checkedAt || current.result.checkedAt < result.checkedAt!)) {
-            current.result = result;
-            current.history = recordHealth(current.history ?? [], result);
-            current.timeline = recordTimelineHealth(current.timeline ?? [], result);
+        const current = state.services.find(item => item.id === service.id);
+        if (current?.revision === service.revision && (!current.result.checkedAt || current.result.checkedAt < result.checkedAt!)) {
+          current.result = result;
+          current.history = recordHealth(current.history ?? [], result);
+          current.timeline = recordTimelineHealth(current.timeline ?? [], result);
+
+          if (result.status === "error") {
+            if (!current.failingSince) {
+              current.failingSince = result.checkedAt ?? nowIso;
+            } else {
+              const failingMs = Date.now() - new Date(current.failingSince).getTime();
+              if (failingMs >= THIRTY_MINUTES_MS) {
+                const hasActiveIncident = state.incidents.some(
+                  inc => inc.serviceId === current.id && !inc.resolved && inc.published
+                );
+                const alreadyPublishedForEpisode = current.lastAutoIncidentAt &&
+                  new Date(current.lastAutoIncidentAt).getTime() >= new Date(current.failingSince).getTime();
+
+                if (!hasActiveIncident && !alreadyPublishedForEpisode) {
+                  const autoIncident: Incident = {
+                    id: crypto.randomUUID(),
+                    title: `${current.name} 服务异常`,
+                    color: "red",
+                    serviceId: current.id,
+                    resolved: false,
+                    published: true,
+                    publishedAt: nowIso,
+                    updatedAt: nowIso,
+                    updates: [
+                      {
+                        id: crypto.randomUUID(),
+                        label: "服务异常",
+                        message: `检测到 ${current.name} 持续异常已超过 30 分钟（${result.message}），系统已自动发布红色预警事态。`,
+                        createdAt: nowIso,
+                        status: "outage",
+                      },
+                    ],
+                  };
+                  state.incidents.unshift(autoIncident);
+                  current.lastAutoIncidentAt = nowIso;
+                }
+              }
+            }
+          } else {
+            current.failingSince = null;
+            current.lastAutoIncidentAt = null;
           }
+        }
       }
     }, db);
 }
