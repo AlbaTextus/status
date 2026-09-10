@@ -17,12 +17,7 @@ interface IncidentsIndexPageProps {
 
 function formatShortDate(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "Asia/Shanghai",
-  });
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
 export function IncidentsIndexPage({ data, initialSelectedId }: IncidentsIndexPageProps) {
@@ -48,10 +43,10 @@ export function IncidentsIndexPage({ data, initialSelectedId }: IncidentsIndexPa
       <StatusHeader />
       <div className="status-shell">
         <main>
-          <nav className="archive-breadcrumb" aria-label="面包屑">
+          <nav className="archive-breadcrumb" aria-label="面包屑导航">
             <Link href="/">AlbaTextus</Link>
             <span>/</span>
-            <span>Incidents</span>
+            <span>事件动态</span>
           </nav>
 
           {featuredIncident ? (
@@ -62,7 +57,7 @@ export function IncidentsIndexPage({ data, initialSelectedId }: IncidentsIndexPa
                   <h1>{featuredIncident.title}</h1>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant={featuredIncident.resolved ? "secondary" : "destructive"}>
-                      {featuredIncident.resolved ? "已解决 · Resolved" : "故障处理中 · Active Outage"}
+                      {featuredIncident.resolved ? "已解决" : "故障处理中"}
                     </Badge>
                     {featuredService && isServiceDown && (
                       <Badge variant="destructive" className="bg-(--outage)/15 text-(--outage) border-(--outage)/40">
@@ -88,7 +83,7 @@ export function IncidentsIndexPage({ data, initialSelectedId }: IncidentsIndexPa
 
               {/* Other Incidents List */}
               {otherIncidents.length > 0 && (
-                <section className="past-incidents-block mt-10" aria-label="Other Incidents">
+                <section className="past-incidents-block mt-10" aria-label="其他事件记录">
                   <div className="section-title-tag text-muted-foreground flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="size-4" />

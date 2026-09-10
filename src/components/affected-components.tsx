@@ -39,27 +39,26 @@ function formatTimeOnly(dateValue: string | number): string {
 
 function formatTooltipRange(start: number, end: number, isOngoing = false): string {
   const startDate = new Date(start);
-  const startStr = startDate.toLocaleString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+  const startMonth = startDate.getMonth() + 1;
+  const startDay = startDate.getDate();
+  const startTime = startDate.toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hour12: false,
     timeZone: "Asia/Shanghai",
   });
+  const startStr = `${startMonth}月${startDay}日 ${startTime}`;
   if (isOngoing) {
-    return `${startStr} → 当前 · Now`;
+    return `${startStr} → 当前 · 持续中`;
   }
   const endDate = new Date(end);
-  const endStr = endDate.toLocaleString("en-US", {
+  const endTime = endDate.toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hour12: false,
     timeZone: "Asia/Shanghai",
   });
-  return `${startStr} → ${endStr}`;
+  return `${startStr} → ${endTime}`;
 }
 
 export function AffectedComponents({ incident, service, allServices = [] }: AffectedComponentsProps) {
@@ -69,21 +68,21 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
   // Determine affected services
   const affectedList: Array<{ id: string; name: string; label: string; liveService?: PublicService }> = [];
   if (service) {
-    affectedList.push({ id: service.id, name: service.name, label: "1 affected component", liveService: service });
+    affectedList.push({ id: service.id, name: service.name, label: "1 个受影响组件", liveService: service });
   } else if (incident.serviceId) {
     const found = allServices.find(s => s.id === incident.serviceId);
     affectedList.push({
       id: incident.serviceId,
-      name: found?.name ?? "Core Service",
-      label: "1 affected component",
+      name: found?.name ?? "核心服务",
+      label: "1 个受影响组件",
       liveService: found,
     });
   } else if (allServices.length > 0) {
     allServices.forEach(s => {
-      affectedList.push({ id: s.id, name: s.name, label: "1 affected component", liveService: s });
+      affectedList.push({ id: s.id, name: s.name, label: "1 个受影响组件", liveService: s });
     });
   } else {
-    affectedList.push({ id: "global", name: "Global Infrastructure", label: "1 affected component" });
+    affectedList.push({ id: "global", name: "全站基础设施", label: "1 个受影响组件" });
   }
 
   // Calculate incident timeline
@@ -235,9 +234,9 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
 
   return (
     <TooltipProvider delay={80}>
-      <section className="affected-components-card system-panel" aria-label="Affected components">
+      <section className="affected-components-card system-panel" aria-label="受影响组件">
         <div className="affected-card-header">
-          <h2>Affected components</h2>
+          <h2>受影响组件</h2>
         </div>
 
         <div className="affected-card-body">
@@ -272,7 +271,7 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
               style={{ left: isOngoing ? "100%" : `${prePct + outagePct}%` }}
             >
               <span className={`axis-tick-label ${isOngoing ? "axis-label-now" : "axis-label-end"}`}>
-                {isOngoing ? "Now · 当前" : formatTimeOnly(incidentEnd)}
+                {isOngoing ? "当前 · 持续中" : formatTimeOnly(incidentEnd)}
               </span>
             </div>
           </div>
@@ -341,7 +340,7 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                             type="button"
                             className="affected-bar-segment segment-operational"
                             style={{ width: `${prePct}%` }}
-                            aria-label={`Pre-incident: ${formatTooltipRange(windowStart, incidentStart)}`}
+                            aria-label={`故障前正常: ${formatTooltipRange(windowStart, incidentStart)}`}
                           />
                         }
                       />
@@ -352,7 +351,7 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                           </div>
                           <div className="affected-tooltip-status text-(--success)">
                             <CheckCircle2 className="size-3.5 shrink-0" />
-                            <span>Operational · 故障前正常</span>
+                            <span>正常运行 · 故障前</span>
                           </div>
                         </div>
                       </TooltipContent>
@@ -396,8 +395,8 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                               <AlertTriangle className="size-3.5 shrink-0" />
                               <span>
                                 {phase.status === "outage"
-                                  ? "Major outage · 严重故障"
-                                  : "Monitoring / Degraded · 观察与缓解中"}
+                                  ? "严重故障"
+                                  : "观察与缓解中"}
                                 {phase.label ? ` (${phase.label})` : ""}
                               </span>
                             </div>
@@ -420,7 +419,7 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                               type="button"
                               className={`affected-bar-segment ${isLiveDown ? "segment-outage" : "segment-operational"}`}
                               style={{ width: `${postPct}%` }}
-                              aria-label={`Post-incident: ${formatTooltipRange(incidentEnd, windowEnd)}`}
+                              aria-label={`恢复后状态: ${formatTooltipRange(incidentEnd, windowEnd)}`}
                             />
                           }
                         />
@@ -435,12 +434,12 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                               {isLiveDown ? (
                                 <>
                                   <AlertTriangle className="size-3.5 shrink-0" />
-                                  <span>Major outage · 当前探测仍异常</span>
+                                  <span>严重故障 · 实时探测仍异常</span>
                                 </>
                               ) : (
                                 <>
                                   <CheckCircle2 className="size-3.5 shrink-0" />
-                                  <span>Operational · 恢复正常</span>
+                                  <span>恢复正常 · 运行良好</span>
                                 </>
                               )}
                             </div>

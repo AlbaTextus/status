@@ -9,16 +9,18 @@ export const UPDATE_STATUS_COLORS: Record<UpdateStatusKind, string> = {
 
 export function formatUpdateTimestamp(dateStr: string): string {
   const date = new Date(dateStr);
-  return date.toLocaleString("zh-CN", {
-    weekday: "short",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const weekday = weekdays[date.getDay()];
+  const time = date.toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
     timeZone: "Asia/Shanghai",
   });
+  return `${year}年${month}月${day}日 ${weekday} ${time}`;
 }
 
 export function resolveUpdateStatus(

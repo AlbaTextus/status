@@ -27,9 +27,9 @@ export function UpdatesTimeline({ incident }: { incident: Incident }) {
   const statuses = incident.updates.map((u, i) => resolveUpdateStatus(u, incident, i, total));
 
   return (
-    <section className="incident-updates-card system-panel" aria-label="Updates">
+    <section className="incident-updates-card system-panel" aria-label="事态更新记录">
       <div className="updates-card-header">
-        <h2>Updates</h2>
+        <h2>事态更新记录</h2>
       </div>
       <div className="updates-timeline-list">
         {incident.updates.map((update, index) => {
@@ -90,7 +90,7 @@ export function IncidentPage({ incident, service, allServices = [] }: IncidentPa
               <h1>{incident.title}</h1>
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant={incident.resolved ? "secondary" : "destructive"}>
-                  {incident.resolved ? "已解决 · Resolved" : "故障处理中 · Active Outage"}
+                  {incident.resolved ? "已解决" : "故障处理中"}
                 </Badge>
                 {service && isServiceDown && (
                   <Badge variant="destructive" className="bg-(--outage)/15 text-(--outage) border-(--outage)/40">
