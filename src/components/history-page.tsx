@@ -13,6 +13,7 @@ import { beijingDate } from "@/lib/history";
 import type { PublicState, Incident } from "@/lib/types";
 import { zhCN } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
+import { resolveIncidentColor } from "@/lib/incident-status";
 
 function parseYMD(dateStr: string): Date {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -333,12 +334,14 @@ export function HistoryPage({ data }: { data: PublicState }) {
                     </div>
                     <div className="archive-events">
                       {items.length > 0 ? (
-                        items.map((item) => (
-                          <Link
-                            key={item.id}
-                            href={`/incidents/${item.id}`}
-                            className={`archive-event archive-${item.color ?? "yellow"}`}
-                          >
+                        items.map((item) => {
+                          const eventColor = resolveIncidentColor(item);
+                          return (
+                            <Link
+                              key={item.id}
+                              href={`/incidents/${item.id}`}
+                              className={`archive-event archive-${eventColor}`}
+                            >
                             <div className="archive-event-heading">
                               <h3>{item.title}</h3>
                               <time dateTime={item.publishedAt ?? item.updatedAt}>
@@ -351,7 +354,8 @@ export function HistoryPage({ data }: { data: PublicState }) {
                               </time>
                             </div>
                           </Link>
-                        ))
+                        );
+                      })
                       ) : (
                         <div className="archive-event archive-operational">
                           <div className="archive-event-heading">

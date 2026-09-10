@@ -92,7 +92,8 @@ export async function adminAction(input: unknown) {
             status: update.status ?? previous?.status,
           };
         });
-        const color = (data.color ?? existing?.color ?? "yellow") as "red" | "yellow";
+        const inferredColor = inputUpdates.some(u => u.status === "outage" || /outage|故障|异常|中断/i.test(`${u.label} ${u.message}`)) ? "red" : "yellow";
+        const color = (data.color ?? existing?.color ?? inferredColor) as "red" | "yellow";
         const next = { id, title, color, serviceId, resolved: data.resolved as boolean, published: data.published as boolean, publishedAt: data.published ? existing?.publishedAt ?? now : null, updatedAt: now, updates };
         if (existing) Object.assign(existing, next); else state.incidents.unshift(next);
       }); break;

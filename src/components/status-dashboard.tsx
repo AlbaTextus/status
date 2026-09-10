@@ -9,6 +9,7 @@ import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "./ui/empty";
 import type { PublicState } from "@/lib/types";
 import { ServiceHistory } from "./service-history";
+import { resolveIncidentColor } from "@/lib/incident-status";
 
 export function StatusDashboard({initial}: {initial: PublicState}) {
   const [data,setData] = useState(initial);
@@ -23,8 +24,9 @@ export function StatusDashboard({initial}: {initial: PublicState}) {
     {error && <Alert variant="destructive" className="mb-5"><AlertTitle>状态读取失败</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
     {activeIncidents.length ? <div className="active-announcements">{activeIncidents.map(incident=>{
       const service = data.services.find(service=>service.id===incident.serviceId);
-      return <section key={incident.id} className={`announcement announcement-${incident.color??"yellow"}`} aria-label="进行中的公告">
-        <div className="announcement-heading"><TriangleAlert aria-hidden="true"/><h2>{incident.color==="red"?"当前有服务异常":"当前有服务需要关注"}</h2></div>
+      const incidentColor = resolveIncidentColor(incident);
+      return <section key={incident.id} className={`announcement announcement-${incidentColor}`} aria-label="进行中的公告">
+        <div className="announcement-heading"><TriangleAlert aria-hidden="true"/><h2>{incidentColor==="red"?"当前有服务异常":"当前有服务需要关注"}</h2></div>
         <div className="announcement-services"><span>{service?.name??"全站公告"}</span></div>
         <Link href={`/incidents/${incident.id}`} className="announcement-body"><TriangleAlert aria-hidden="true"/><div><h3>{incident.title}</h3><p>{incident.updates[0]?.message}</p><div className="announcement-meta">{incident.updates[0]?.label} · 最近更新 <DisplayTime value={incident.updatedAt}/>{service&&` · 影响 ${service.name}`}</div></div></Link>
       </section>;

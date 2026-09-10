@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Info }
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { HealthLabel } from "./health-label";
 import { statusLabels, type Incident, type PublicService, type HealthStatus, type UpdateStatusKind } from "@/lib/types";
-import { resolveUpdateStatus } from "@/lib/incident-status";
+import { resolveUpdateStatus, resolveIncidentColor } from "@/lib/incident-status";
 import { cn } from "cn";
 
 interface AffectedComponentsProps {
@@ -160,7 +160,8 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
   }> = [];
 
   if (activeUpdates.length === 0) {
-    const fallbackStatus: UpdateStatusKind = incident.color === "red" ? "outage" : "monitoring";
+    const effectiveColor = resolveIncidentColor(incident);
+    const fallbackStatus: UpdateStatusKind = effectiveColor === "red" ? "outage" : "monitoring";
     rawPhases.push({
       id: "phase-default",
       start: incidentStart,

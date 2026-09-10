@@ -81,3 +81,40 @@ export function resolveUpdateStatus(
 
   return incident.color === "red" ? "outage" : "monitoring";
 }
+
+export function resolveIncidentColor(incident: Incident): "red" | "yellow" {
+  if (incident.color === "red") {
+    return "red";
+  }
+
+  if (incident.updates && incident.updates.length > 0) {
+    // 找出初始发生时（最早的一条更新）的状态
+    const sorted = [...incident.updates].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const initial = sorted[0];
+    if (initial) {
+      if (initial.status === "outage") return "red";
+      const initialText = `${initial.label} ${initial.message}`.toLowerCase();
+      if (
+        initialText.includes("outage") ||
+        initialText.includes("故障") ||
+        initialText.includes("异常") ||
+        initialText.includes("中断")
+      ) {
+        return "red";
+      }
+    }
+
+    // 检查历史全周期内是否曾发生过 outage 中断/异常
+    const hasEverOutage = incident.updates.some(u => {
+      if (u.status === "outage") return true;
+      const t = `${u.label} ${u.message}`.toLowerCase();
+      return t.includes("outage") || t.includes("故障") || t.includes("异常") || t.includes("中断");
+    });
+    if (hasEverOutage) {
+      return "red";
+    }
+  }
+
+  return "yellow";
+}
+

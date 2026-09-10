@@ -7,6 +7,13 @@ export { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-nex
 const worker = {
   fetch: nextWorker.fetch,
   async scheduled(_event, env) {
+    // 在本地开发环境中，workerd 沙箱受限于私有网络策略无法直连本机服务，由 Node.js 内置调度器负责探测；生产环境正常执行
+    if (
+      env?.STATUS_ADMIN_TOKEN === "albatextus-dev-token" ||
+      (typeof process !== "undefined" && process.env.NODE_ENV === "development")
+    ) {
+      return;
+    }
     await scheduledCheck(env.DB);
   },
 };
