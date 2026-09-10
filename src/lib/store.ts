@@ -37,13 +37,29 @@ export async function publicState(): Promise<PublicState> {
     autoRefresh(db).catch(() => {});
   }
   return {
-    services: state.services.map(({ id, name, result, history, timeline, failingSince, lastAutoIncidentAt }) => ({
+    services: state.services.map(({
+      id,
+      name,
+      result,
+      history,
+      timeline,
+      failingSince,
+      lastAutoIncidentAt,
+      maintenanceSince,
+      lastAutoMaintenanceAt,
+      autoMaintenanceIncidentId,
+      maintenanceRecoveringSince,
+    }) => ({
       id,
       name,
       history: history ?? [],
       timeline: timeline ?? [],
       failingSince: failingSince ?? null,
       lastAutoIncidentAt: lastAutoIncidentAt ?? null,
+      maintenanceSince: maintenanceSince ?? null,
+      lastAutoMaintenanceAt: lastAutoMaintenanceAt ?? null,
+      autoMaintenanceIncidentId: autoMaintenanceIncidentId ?? null,
+      maintenanceRecoveringSince: maintenanceRecoveringSince ?? null,
       result: result.checkedAt && Date.now() - Date.parse(result.checkedAt) > 180000
         ? { ...result, status: "unknown", message: "检测结果已过期，等待重新检测" }
         : result,

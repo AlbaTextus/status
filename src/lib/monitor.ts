@@ -36,6 +36,7 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
     await mutateStore(state => {
       const nowIso = new Date().toISOString();
       const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+      const TEN_MINUTES_MS = 10 * 60 * 1000;
 
       for (const { service, result } of results) {
         const current = state.services.find(item => item.id === service.id);
@@ -44,7 +45,11 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
           current.history = recordHealth(current.history ?? [], result);
           current.timeline = recordTimelineHealth(current.timeline ?? [], result);
 
+          // 1. Error tracking (连续异常超过 30 分钟自动发布红色事态)
           if (result.status === "error") {
+            current.maintenanceRecoveringSince = null;
+            current.maintenanceSince = null;
+
             if (!current.failingSince) {
               current.failingSince = result.checkedAt ?? nowIso;
             } else {
@@ -84,6 +89,85 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
           } else {
             current.failingSince = null;
             current.lastAutoIncidentAt = null;
+          }
+
+          // 2. Maintenance tracking (进入维护界面持续超过 10 分钟自动发布维护事态)
+          if (result.status === "maintenance") {
+            current.maintenanceRecoveringSince = null;
+
+            if (!current.maintenanceSince) {
+              current.maintenanceSince = result.checkedAt ?? nowIso;
+            } else {
+              const maintenanceMs = Date.now() - new Date(current.maintenanceSince).getTime();
+              if (maintenanceMs >= TEN_MINUTES_MS) {
+                const hasActiveIncident = state.incidents.some(
+                  inc => inc.serviceId === current.id && !inc.resolved && inc.published
+                );
+                const alreadyPublishedForEpisode = current.lastAutoMaintenanceAt &&
+                  new Date(current.lastAutoMaintenanceAt).getTime() >= new Date(current.maintenanceSince).getTime();
+
+                if (!hasActiveIncident && !alreadyPublishedForEpisode) {
+                  const autoIncident: Incident = {
+                    id: crypto.randomUUID(),
+                    title: `${current.name} 计划维护`,
+                    color: "yellow",
+                    serviceId: current.id,
+                    resolved: false,
+                    published: true,
+                    publishedAt: nowIso,
+                    updatedAt: nowIso,
+                    updates: [
+                      {
+                        id: crypto.randomUUID(),
+                        label: "计划维护",
+                        message: `检测到 ${current.name} 进入维护状态已持续超过 10 分钟，系统已自动发布维护事态。`,
+                        createdAt: nowIso,
+                        status: "monitoring",
+                      },
+                    ],
+                  };
+                  state.incidents.unshift(autoIncident);
+                  current.autoMaintenanceIncidentId = autoIncident.id;
+                  current.lastAutoMaintenanceAt = nowIso;
+                }
+              }
+            }
+          }
+
+          // 3. Operational recovery tracking (检测到正常服务后持续满 10 分钟自动取消维护事态)
+          if (result.status === "operational") {
+            const activeMaintenanceIncident = current.autoMaintenanceIncidentId
+              ? state.incidents.find(inc => inc.id === current.autoMaintenanceIncidentId && !inc.resolved)
+              : null;
+
+            if (activeMaintenanceIncident) {
+              if (!current.maintenanceRecoveringSince) {
+                current.maintenanceRecoveringSince = result.checkedAt ?? nowIso;
+              } else {
+                const recoveringMs = Date.now() - new Date(current.maintenanceRecoveringSince).getTime();
+                if (recoveringMs >= TEN_MINUTES_MS) {
+                  activeMaintenanceIncident.resolved = true;
+                  activeMaintenanceIncident.updatedAt = nowIso;
+                  activeMaintenanceIncident.updates.unshift({
+                    id: crypto.randomUUID(),
+                    label: "已恢复",
+                    message: `检测到 ${current.name} 服务已持续恢复正常运行满 10 分钟，维护事态已自动取消并恢复。`,
+                    createdAt: nowIso,
+                    status: "resolved",
+                  });
+
+                  current.maintenanceSince = null;
+                  current.lastAutoMaintenanceAt = null;
+                  current.autoMaintenanceIncidentId = null;
+                  current.maintenanceRecoveringSince = null;
+                }
+              }
+            } else {
+              current.maintenanceSince = null;
+              current.lastAutoMaintenanceAt = null;
+              current.autoMaintenanceIncidentId = null;
+              current.maintenanceRecoveringSince = null;
+            }
           }
         }
       }
