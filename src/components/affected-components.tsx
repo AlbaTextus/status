@@ -37,6 +37,15 @@ function formatTimeOnly(dateValue: string | number): string {
   });
 }
 
+function formatDurationStr(ms: number): string {
+  const totalMins = Math.round(ms / 60000);
+  if (totalMins < 1) return "< 1 分钟";
+  if (totalMins < 60) return `${totalMins} 分钟`;
+  const hours = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  return mins > 0 ? `${hours} 小时 ${mins} 分钟` : `${hours} 小时`;
+}
+
 function formatTooltipRange(start: number, end: number, isOngoing = false): string {
   const startDate = new Date(start);
   const startMonth = startDate.getMonth() + 1;
@@ -85,54 +94,14 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
     affectedList.push({ id: "global", name: "全站基础设施", label: "1 个受影响组件" });
   }
 
-  // Calculate incident timeline
+  // Calculate incident timeline (100% focused on real incident lifecycle)
   const pubTime = Date.parse(incident.publishedAt ?? incident.updatedAt);
   const updateTimes = incident.updates.map(u => Date.parse(u.createdAt)).filter(t => !Number.isNaN(t));
   const incidentStart = Math.min(...(updateTimes.length > 0 ? updateTimes : [pubTime]), pubTime);
 
   const isOngoing = !incident.resolved;
-  const lastUpdate = Math.max(...(updateTimes.length > 0 ? updateTimes : [pubTime]), pubTime);
-  const incidentEnd = isOngoing ? Math.max(mountTime, lastUpdate) : lastUpdate;
-
-  const outageDuration = Math.max(incidentEnd - incidentStart, 15 * 60 * 1000);
   const effectiveColor = resolveIncidentColor(incident);
   const isMaintenance = effectiveColor === "yellow" || incident.title.includes("维护");
-  const oldestUpdate = incident.updates.length > 0 ? incident.updates[incident.updates.length - 1] : null;
-  const initialWasMaintenance = isMaintenance || (oldestUpdate ? (oldestUpdate.label.includes("维护") || oldestUpdate.message.includes("维护")) : false);
-
-  // Calculate segment percentage proportions
-  let prePct: number;
-  let outagePct: number;
-  let postPct: number;
-  let windowStart: number;
-  let windowEnd: number;
-
-  if (isOngoing) {
-    prePct = 15;
-    outagePct = 85;
-    postPct = 0;
-    const preDuration = (outageDuration / 0.85) * 0.15;
-    windowStart = incidentStart - preDuration;
-    windowEnd = incidentEnd;
-  } else {
-    prePct = 15;
-    outagePct = 70;
-    postPct = 15;
-    const paddingDuration = (outageDuration / 0.70) * 0.15;
-    windowStart = incidentStart - paddingDuration;
-    windowEnd = incidentEnd + paddingDuration;
-  }
-
-  // Determine phases during the outage period (incidentStart to incidentEnd)
-  interface OutagePhase {
-    id: string;
-    start: number;
-    end: number;
-    status: UpdateStatusKind;
-    label: string;
-    message?: string;
-    pct: number;
-  }
 
   // 1. Chronologically sort all updates
   const sortedUpdates = [...incident.updates]
@@ -149,7 +118,25 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
   // 2. Separate active (pre-resolution) updates from resolution
   const activeUpdates = sortedUpdates.filter((item) => item.status !== "resolved");
   const resolveUpdate = sortedUpdates.find((item) => item.status === "resolved");
-  const actualOutageEnd = resolveUpdate && !isOngoing ? resolveUpdate.time : incidentEnd;
+  const lastUpdate = Math.max(...(updateTimes.length > 0 ? updateTimes : [pubTime]), pubTime);
+  const actualOutageEnd = resolveUpdate && !isOngoing ? resolveUpdate.time : lastUpdate;
+  const incidentEnd = isOngoing ? Math.max(mountTime, actualOutageEnd) : actualOutageEnd;
+
+  const totalOutageDuration = Math.max(incidentEnd - incidentStart, 60000);
+  const prePct = 5; // 5% green anchor at front representing healthy baseline
+  const outagePct = 95;
+
+  // Determine phases during the incident period (incidentStart to incidentEnd)
+  interface OutagePhase {
+    id: string;
+    start: number;
+    end: number;
+    status: UpdateStatusKind;
+    label: string;
+    message?: string;
+    duration: number;
+    pct: number;
+  }
 
   const rawPhases: Array<{
     id: string;
@@ -169,7 +156,8 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
       end: actualOutageEnd,
       status: fallbackStatus,
       label: fallbackStatus === "outage" ? "严重故障" : (isMaintenance ? "计划维护" : "性能降级 / 关注中"),
-      duration: Math.max(actualOutageEnd - incidentStart, 60000),
+      message: incident.updates[0]?.message,
+      duration: totalOutageDuration,
     });
   } else {
     for (let i = 0; i < activeUpdates.length; i++) {
@@ -190,28 +178,25 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
     }
   }
 
-  // Proportional widths within outagePct with guaranteed minimum width for each phase
-  const totalOutageDuration = rawPhases.reduce((acc, p) => acc + p.duration, 0) || 1;
+  // 3. Proportional widths reflecting REAL elapsed time across the 95% outage space
   const numPhases = rawPhases.length;
-
-  const MIN_SHARE = numPhases > 1 ? 0.15 : 1.0;
-  const totalMinShare = Math.min(0.6, numPhases * MIN_SHARE);
-  const remainingShare = Math.max(0, 1.0 - totalMinShare);
+  const MIN_PCT = numPhases > 1 ? 3 : outagePct;
+  const totalMinPct = Math.min(20, numPhases * MIN_PCT);
+  const remainingPct = outagePct - totalMinPct;
 
   const outagePhases: OutagePhase[] = rawPhases.map((phase) => {
     const rawRatio = phase.duration / totalOutageDuration;
-    const share = numPhases > 1 ? MIN_SHARE + remainingShare * rawRatio : 1.0;
-    const pct = Number((share * outagePct).toFixed(2));
+    const pct = numPhases > 1 ? Number((MIN_PCT + remainingPct * rawRatio).toFixed(2)) : outagePct;
     return {
       ...phase,
       pct,
     };
   });
 
-  // Normalize so sum of outagePhases pct matches outagePct
-  const actualOutageSum = outagePhases.reduce((acc, p) => acc + p.pct, 0);
-  if (outagePhases.length > 0 && actualOutageSum > 0) {
-    const diff = outagePct - actualOutageSum;
+  // Normalize so sum of outagePhases pct is exactly 95%
+  const actualSum = outagePhases.reduce((acc, p) => acc + p.pct, 0);
+  if (outagePhases.length > 0 && actualSum > 0) {
+    const diff = Number((outagePct - actualSum).toFixed(2));
     outagePhases[outagePhases.length - 1].pct = Number(
       (outagePhases[outagePhases.length - 1].pct + diff).toFixed(2)
     );
@@ -223,10 +208,8 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
   for (let i = 0; i < outagePhases.length - 1; i++) {
     runningLeft += outagePhases[i].pct;
     const nextPhase = outagePhases[i + 1];
-    if (
-      nextPhase.start > incidentStart + 60000 &&
-      nextPhase.start < incidentEnd - 60000
-    ) {
+    // Keep mid marks from colliding with start or end labels
+    if (runningLeft >= 18 && runningLeft <= 86) {
       intermediateUpdates.push({
         time: nextPhase.start,
         leftPct: runningLeft,
@@ -242,9 +225,9 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
         </div>
 
         <div className="affected-card-body">
-          {/* Time axis header matching OpenAI Statuspage */}
+          {/* Time axis header matching actual incident start to end */}
           <div className="affected-timeline-axis-container" aria-hidden="true">
-            {/* Outage start mark */}
+            {/* Outage start mark aligned with the beginning of the outage at 5% */}
             <div
               className="axis-tick-wrapper"
               style={{ left: `${prePct}%` }}
@@ -267,14 +250,22 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
               </div>
             ))}
 
-            {/* Outage end / Now mark */}
+            {/* Outage end / Now mark at 100% */}
             <div
               className="axis-tick-wrapper"
-              style={{ left: isOngoing ? "100%" : `${prePct + outagePct}%` }}
+              style={{ left: "100%" }}
             >
-              <span className={`axis-tick-label ${isOngoing ? "axis-label-now" : "axis-label-end"}`}>
-                {isOngoing ? "当前 · 持续中" : formatTimeOnly(incidentEnd)}
-              </span>
+              {isOngoing ? (
+                <span className="axis-tick-label axis-label-now">
+                  <span className="live-beacon-dot" />
+                  当前 · 持续中
+                </span>
+              ) : (
+                <span className="axis-tick-label axis-label-resolved">
+                  <CheckCircle2 className="size-3.5 inline mr-1" />
+                  {formatTimeOnly(actualOutageEnd)} 已解决
+                </span>
+              )}
             </div>
           </div>
 
@@ -331,36 +322,19 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                     </div>
                   )}
 
-                  {/* Segmented timeline bar */}
+                  {/* Real-proportion segmented timeline bar */}
                   <div className="affected-bar-track relative">
-                    {/* Pre-incident segment: ALWAYS GREEN (baseline healthy state before incident) */}
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            className="affected-bar-segment segment-operational"
-                            style={{ width: `${prePct}%` }}
-                            aria-label={`发生前正常: ${formatTooltipRange(windowStart, incidentStart)}`}
-                          />
-                        }
-                      />
-                      <TooltipContent>
-                        <div className="affected-tooltip-body">
-                          <div className="affected-tooltip-time">
-                            {formatTooltipRange(windowStart, incidentStart)}
-                          </div>
-                          <div className="affected-tooltip-status text-(--success)">
-                            <CheckCircle2 className="size-3.5 shrink-0" />
-                            <span>正常运行 · {initialWasMaintenance ? "维护前" : "故障前"}</span>
-                          </div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
+                    {/* Pre-incident 5% green segment: baseline healthy visual anchor without tooltip */}
+                    <div
+                      className="affected-bar-segment segment-operational pointer-events-none"
+                      style={{ width: `${prePct}%` }}
+                      aria-hidden="true"
+                    />
 
-                    {/* Outage phases: RED (outage), YELLOW (monitoring), etc. */}
                     {outagePhases.map((phase, idx) => {
                       const isPhaseMaintenance = phase.label?.includes("维护") || (phase.status !== "outage" && isMaintenance);
+                      const isLastPhase = idx === outagePhases.length - 1;
+                      const isLive = isOngoing && isLastPhase;
 
                       return (
                         <Tooltip key={phase.id}>
@@ -372,10 +346,11 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                                   "affected-bar-segment relative",
                                   phase.status === "outage" && "segment-outage",
                                   phase.status === "monitoring" && "segment-degraded",
-                                  phase.status === "neutral" && "segment-unknown"
+                                  phase.status === "neutral" && "segment-unknown",
+                                  isLive && "segment-ongoing"
                                 )}
                                 style={{ width: `${phase.pct}%` }}
-                                aria-label={`${phase.label}: ${formatTooltipRange(phase.start, phase.end, isOngoing && idx === outagePhases.length - 1)}`}
+                                aria-label={`${phase.label}: ${formatTooltipRange(phase.start, phase.end, isLive)}`}
                               />
                             }
                           />
@@ -385,8 +360,11 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                                 {formatTooltipRange(
                                   phase.start,
                                   phase.end,
-                                  isOngoing && idx === outagePhases.length - 1
+                                  isLive
                                 )}
+                                <span className="opacity-75 ml-1 font-normal">
+                                  · 持续 {formatDurationStr(phase.duration)}
+                                </span>
                               </div>
                               <div
                                 className={cn(
@@ -412,43 +390,16 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
                                   {phase.label ? ` (${phase.label})` : ""}
                                 </span>
                               </div>
-                            {phase.message && (
-                              <div className="text-xs text-muted-foreground line-clamp-2 max-w-[260px] whitespace-pre-wrap">
-                                {phase.message}
-                              </div>
-                            )}
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    );
-                  })}
-
-                    {/* Post-incident segment (only when incident is resolved) */}
-                    {!isOngoing && postPct > 0 && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <button
-                              type="button"
-                              className="affected-bar-segment segment-operational"
-                              style={{ width: `${postPct}%` }}
-                              aria-label={`恢复后状态: ${formatTooltipRange(incidentEnd, windowEnd)}`}
-                            />
-                          }
-                        />
-                        <TooltipContent>
-                          <div className="affected-tooltip-body">
-                            <div className="affected-tooltip-time">
-                              {formatTooltipRange(incidentEnd, windowEnd)}
+                              {phase.message && (
+                                <div className="text-xs text-muted-foreground line-clamp-2 max-w-[260px] whitespace-pre-wrap">
+                                  {phase.message}
+                                </div>
+                              )}
                             </div>
-                            <div className="affected-tooltip-status text-(--success)">
-                              <CheckCircle2 className="size-3.5 shrink-0" />
-                              <span>恢复正常 · 运行良好</span>
-                            </div>
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
                   </div>
                 </div>
               );

@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react
 import Link from "next/link";
 import { motion, MotionConfig } from "framer-motion";
 import { ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, FileText, LoaderCircle, Pencil, Plus, RefreshCw, RotateCcw, Server, Trash2 } from "lucide-react";
+import { AutoPublishSettings, AutoPublishRuleFields } from "./auto-publish-settings";
 import { DisplayTime, HealthLabel } from "./health-label";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -12,7 +13,7 @@ import { Textarea } from "./ui/textarea";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "./ui/empty";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Separator } from "./ui/separator";
 import { defaultAutoPublishRules, type AutoPublishRules, type Incident, type Service, type Store, type UpdateStatusKind } from "@/lib/types";
@@ -74,6 +75,7 @@ export function AdminDashboard(){
   const [preview,setPreview]=useState(false);
   const [formError,setFormError]=useState("");
   const [rulesDraft,setRulesDraft]=useState<AutoPublishRules|null>(null);
+  const [serviceRotations, setServiceRotations] = useState<Record<string, number>>({});
   const nowMs = useSyncExternalStore(subscribeNow, getNowSnapshot, getNowServerSnapshot);
   const activeRules = rulesDraft ?? data?.rules ?? defaultAutoPublishRules;
 
@@ -149,7 +151,27 @@ export function AdminDashboard(){
     return()=>{active=false;controller.abort();clearInterval(timer);};
   },[ready,busy,locked,token]);
 
-  async function act(body:Record<string,unknown>,success:string){setBusy(true);setFormError("");setError("");setNotice("");try{const response=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json","x-admin-token":token},body:JSON.stringify(body)});const value=await response.json();if(!response.ok)throw new Error(value.error);setData(value);setNotice(success);return true;}catch(e){const message=e instanceof Error?e.message:"操作失败";setError(message);setFormError(message);return false;}finally{setBusy(false);}}
+  async function act(body:Record<string,unknown>,success:string){
+    setBusy(true);setFormError("");setError("");setNotice("");
+    const minDelay = new Promise(resolve => setTimeout(resolve, 700));
+    try{
+      const response=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json","x-admin-token":token},body:JSON.stringify(body)});
+      const value=await response.json();
+      if(!response.ok)throw new Error(value.error);
+      await minDelay;
+      setData(value);
+      setNotice(success);
+      return true;
+    }catch(e){
+      await minDelay;
+      const message=e instanceof Error?e.message:"操作失败";
+      setError(message);
+      setFormError(message);
+      return false;
+    }finally{
+      setBusy(false);
+    }
+  }
   function editService(service?:Service){
     setFormError("");
     setServiceDraft(service ? {
@@ -256,7 +278,6 @@ export function AdminDashboard(){
   const currentNow = nowMs;
 
   return <MotionConfig reducedMotion="user"><div className="status-shell admin-shell"><main>
-    <div className="page-heading"><div><span className="page-eyebrow">ALBATEXTUS / STATUS</span><h1>后台管理</h1><p>管理服务检测，手动编写并发布事件更新。</p></div><Button variant="outline" nativeButton={false} render={<Link href="/"/>}>查看状态页<ArrowUpRight data-icon="inline-end"/></Button></div>
     {error&&<Alert variant="destructive" className="mb-5"><AlertTitle>操作未完成</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
     {notice&&<p className="save-notice" role="status">{notice}</p>}
     {locked&&<section className="system-panel access-panel"><h2>管理验证</h2><form onSubmit={async event=>{event.preventDefault();sessionStorage.setItem("status-admin-token",tokenInput);await load(tokenInput);}}><FieldGroup><Field><FieldLabel htmlFor="admin-token">管理密钥</FieldLabel><Input id="admin-token" type="password" value={tokenInput} onChange={e=>setTokenInput(e.target.value)} required autoComplete="current-password"/><FieldDescription>填写服务器配置的 STATUS_ADMIN_TOKEN。</FieldDescription></Field><Button type="submit">进入后台</Button></FieldGroup></form></section>}
@@ -325,8 +346,21 @@ export function AdminDashboard(){
                 </div>
                 <HealthLabel result={service.result} />
                 <div className="row-actions">
-                  <Button variant="ghost" size="icon" disabled={busy} aria-label={`检测 ${service.name}`} onClick={() => act({ action: "check", id: service.id }, `${service.name} 检测完成`)}>
-                    <RefreshCw />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={busy}
+                    aria-label={`检测 ${service.name}`}
+                    className="disabled:opacity-100 cursor-pointer"
+                    onClick={() => {
+                      setServiceRotations(prev => ({ ...prev, [service.id]: (prev[service.id] || 0) + 1 }));
+                      act({ action: "check", id: service.id }, `${service.name} 检测完成`);
+                    }}
+                  >
+                    <RefreshCw
+                      style={{ transform: `rotate(${(serviceRotations[service.id] || 0) * 360}deg)` }}
+                      className="transition-transform duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
+                    />
                   </Button>
                   <Button variant="ghost" size="icon" disabled={busy} aria-label={`编辑 ${service.name}`} onClick={() => editService(service)}>
                     <Pencil />
@@ -350,82 +384,14 @@ export function AdminDashboard(){
         <div className="admin-rule"><span className="health-operational">200 · 正常</span><span className="health-maintenance">433 · 维护中</span><span className="health-error">其他 / 连接失败 · 异常</span><span>每分钟自动检测</span></div>
       </section>
 
-      <section className="system-panel admin-section">
-        <div className="admin-section-heading">
-          <div>
-            <h2>自动发布规则</h2>
-            <p>自定义服务异常与维护事件的自动发布时间阈值与通告说明文案。</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={resetRules}>
-              <RotateCcw data-icon="inline-start" className="size-3.5"/>重置默认
-            </Button>
-            <Button type="button" size="sm" disabled={busy} onClick={saveRules}>
-              {busy&&<LoaderCircle data-icon="inline-start" className="animate-spin size-3.5"/>}保存规则
-            </Button>
-          </div>
-        </div>
-        <Separator/>
-        <div className="p-5 flex flex-col gap-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <Field>
-              <FieldLabel htmlFor="rule-enabled">自动发布状态</FieldLabel>
-              <Select id="rule-enabled" value={activeRules.enabled?"true":"false"} onValueChange={val=>setRulesDraft(d=>({...(d??activeRules),enabled:val==="true"}))}>
-                <SelectTrigger id="rule-enabled" className="w-full"><SelectValue/></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="true" label="启用 (自动发布)">启用 · 达到阈值自动发布与解除</SelectItem>
-                  <SelectItem value="false" label="停用 (不自动发布)">停用 · 仅记录健康状态不自动发布</SelectItem>
-                </SelectContent>
-              </Select>
-              <FieldDescription>是否在达到阈值时自动创建或解除事态</FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="rule-error-threshold">异常发布时间 (分钟)</FieldLabel>
-              <Input id="rule-error-threshold" type="number" min={1} max={1440} value={activeRules.errorThresholdMinutes} onChange={e=>setRulesDraft(d=>({...(d??activeRules),errorThresholdMinutes:Math.max(1,parseInt(e.target.value)||1)}))}/>
-              <FieldDescription>连续故障达到此时间自动发布红色预警</FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="rule-maintenance-threshold">维护发布时间 (分钟)</FieldLabel>
-              <Input id="rule-maintenance-threshold" type="number" min={1} max={1440} value={activeRules.maintenanceThresholdMinutes} onChange={e=>setRulesDraft(d=>({...(d??activeRules),maintenanceThresholdMinutes:Math.max(1,parseInt(e.target.value)||1)}))}/>
-              <FieldDescription>连续维护达到此时间自动发布维护事态</FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="rule-recovery-threshold">恢复解除时间 (分钟)</FieldLabel>
-              <Input id="rule-recovery-threshold" type="number" min={1} max={1440} value={activeRules.recoveryThresholdMinutes} onChange={e=>setRulesDraft(d=>({...(d??activeRules),recoveryThresholdMinutes:Math.max(1,parseInt(e.target.value)||1)}))}/>
-              <FieldDescription>连续正常达到此时间自动取消事态</FieldDescription>
-            </Field>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <Field>
-              <FieldLabel htmlFor="rule-error-template">异常事件发布说明模板</FieldLabel>
-              <Textarea id="rule-error-template" rows={2} maxLength={500} value={activeRules.errorMessageTemplate} onChange={e=>setRulesDraft(d=>({...(d??activeRules),errorMessageTemplate:e.target.value}))} placeholder="例如：检测到 {service} 持续异常已超过 {minutes} 分钟（{reason}），系统已自动发布红色预警事态。"/>
-              <FieldDescription>
-                可用占位变量：<code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">&#123;service&#125;</code> 服务名称、<code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">&#123;minutes&#125;</code> 持续分钟、<code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">&#123;reason&#125;</code> 检测状态说明
-              </FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="rule-maintenance-template">维护事件发布说明模板</FieldLabel>
-              <Textarea id="rule-maintenance-template" rows={2} maxLength={500} value={activeRules.maintenanceMessageTemplate} onChange={e=>setRulesDraft(d=>({...(d??activeRules),maintenanceMessageTemplate:e.target.value}))} placeholder="例如：检测到 {service} 进入维护状态已持续超过 {minutes} 分钟，系统已自动发布维护事态。"/>
-              <FieldDescription>
-                可用占位变量：<code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">&#123;service&#125;</code> 服务名称、<code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">&#123;minutes&#125;</code> 持续分钟
-              </FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="rule-recovery-template">恢复正常解除说明模板</FieldLabel>
-              <Textarea id="rule-recovery-template" rows={2} maxLength={500} value={activeRules.recoveryMessageTemplate} onChange={e=>setRulesDraft(d=>({...(d??activeRules),recoveryMessageTemplate:e.target.value}))} placeholder="例如：检测到 {service} 服务已持续恢复正常运行满 {minutes} 分钟，相关事态已自动取消并恢复。"/>
-              <FieldDescription>
-                可用占位变量：<code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">&#123;service&#125;</code> 服务名称、<code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">&#123;minutes&#125;</code> 持续分钟
-              </FieldDescription>
-            </Field>
-          </div>
-        </div>
-      </section>
+      <AutoPublishSettings
+        rules={activeRules}
+        busy={busy}
+        dirty={JSON.stringify(activeRules) !== JSON.stringify(data.rules ?? defaultAutoPublishRules)}
+        onChange={setRulesDraft}
+        onSave={saveRules}
+        onReset={resetRules}
+      />
 
 
       <section className="system-panel admin-section">
@@ -583,21 +549,55 @@ export function AdminDashboard(){
     )}
   </main></div>
 
-  <Dialog open={serviceDraft!==null} onOpenChange={open=>{if(!open&&!busy)setServiceDraft(null);}}><DialogContent className="service-editor-dialog sm:max-w-xl"><DialogHeader><DialogTitle>{serviceDraft?.id?"编辑服务":"添加服务"}</DialogTitle><DialogDescription>配置服务的基础检测地址与独立自动发布规则。</DialogDescription></DialogHeader>{serviceDraft&&<form onSubmit={saveService} className="editor-body flex flex-col gap-4"><FieldGroup><Field><FieldLabel htmlFor="service-name">服务名称</FieldLabel><Input id="service-name" value={serviceDraft.name} onChange={e=>setServiceDraft({...serviceDraft,name:e.target.value})} maxLength={80} required placeholder="填写服务名称"/></Field><Field><FieldLabel htmlFor="service-url">服务地址</FieldLabel><Input id="service-url" value={serviceDraft.url} onChange={e=>setServiceDraft({...serviceDraft,url:e.target.value})} type="url" required placeholder="https://你的服务域名/healthz"/><FieldDescription>填写完整地址；没有 /healthz 时会自动补全。</FieldDescription></Field>
-  <Separator className="my-1"/>
-  <Field><FieldLabel htmlFor="service-rule-mode">自动发布规则模式</FieldLabel><Select id="service-rule-mode" value={serviceDraft.useCustomRules?"custom":"global"} onValueChange={val=>setServiceDraft({...serviceDraft,useCustomRules:val==="custom",rules:serviceDraft.rules?{...serviceDraft.rules}:{...activeRules}})}><SelectTrigger id="service-rule-mode" className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="global" label="跟随全局默认规则">跟随全局默认规则 (继承全局配置)</SelectItem><SelectItem value="custom" label="为此服务独立自定义">此服务独立自定义规则 (单独配置阈值与文案)</SelectItem></SelectContent></Select><FieldDescription>{serviceDraft.useCustomRules?"此服务将使用独立参数，不再跟随全局规则变动。":`当前跟随全局默认规则：异常 ${activeRules.errorThresholdMinutes}m / 维护 ${activeRules.maintenanceThresholdMinutes}m / 恢复 ${activeRules.recoveryThresholdMinutes}m。`}</FieldDescription></Field>
-  {serviceDraft.useCustomRules&&<div className="rounded-lg border bg-muted/40 p-4 flex flex-col gap-4"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><span className="text-sm font-medium">独立规则参数</span><Badge variant="outline" className="text-xs border-primary/40 text-primary">独立生效</Badge></div><Button type="button" variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={()=>setServiceDraft({...serviceDraft,rules:{...activeRules}})}><RotateCcw data-icon="inline-start" className="size-3"/>载入全局当前值</Button></div>
-  <Field><FieldLabel htmlFor="service-rule-enabled">自动发布状态</FieldLabel><Select id="service-rule-enabled" value={serviceDraft.rules.enabled?"true":"false"} onValueChange={val=>setServiceDraft({...serviceDraft,rules:{...serviceDraft.rules,enabled:val==="true"}})}><SelectTrigger id="service-rule-enabled" className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="true" label="启用 (自动发布)">启用 · 达到设定阈值时自动发布与解除</SelectItem><SelectItem value="false" label="停用 (不发布)">停用 · 仅监控健康状态，不自动发布事件</SelectItem></SelectContent></Select></Field>
-  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-    <Field><FieldLabel htmlFor="service-rule-error">异常阈值 (分钟)</FieldLabel><Input id="service-rule-error" type="number" min={1} max={1440} value={serviceDraft.rules.errorThresholdMinutes} onChange={e=>setServiceDraft({...serviceDraft,rules:{...serviceDraft.rules,errorThresholdMinutes:Math.max(1,parseInt(e.target.value)||1)}})}/><FieldDescription>连续故障发布红色事态</FieldDescription></Field>
-    <Field><FieldLabel htmlFor="service-rule-maintenance">维护阈值 (分钟)</FieldLabel><Input id="service-rule-maintenance" type="number" min={1} max={1440} value={serviceDraft.rules.maintenanceThresholdMinutes} onChange={e=>setServiceDraft({...serviceDraft,rules:{...serviceDraft.rules,maintenanceThresholdMinutes:Math.max(1,parseInt(e.target.value)||1)}})}/><FieldDescription>连续维护发布维护事态</FieldDescription></Field>
-    <Field><FieldLabel htmlFor="service-rule-recovery">解除阈值 (分钟)</FieldLabel><Input id="service-rule-recovery" type="number" min={1} max={1440} value={serviceDraft.rules.recoveryThresholdMinutes} onChange={e=>setServiceDraft({...serviceDraft,rules:{...serviceDraft.rules,recoveryThresholdMinutes:Math.max(1,parseInt(e.target.value)||1)}})}/><FieldDescription>恢复正常后自动解除事态</FieldDescription></Field>
-  </div>
-  <Field><FieldLabel htmlFor="service-rule-error-tpl">独立异常事件说明模板</FieldLabel><Textarea id="service-rule-error-tpl" rows={2} maxLength={500} value={serviceDraft.rules.errorMessageTemplate} onChange={e=>setServiceDraft({...serviceDraft,rules:{...serviceDraft.rules,errorMessageTemplate:e.target.value}})} placeholder="例如：检测到 {service} 持续异常已超过 {minutes} 分钟（{reason}）..."/><FieldDescription>占位符：<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">&#123;service&#125;</code> 服务名、<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">&#123;minutes&#125;</code> 分钟、<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">&#123;reason&#125;</code> 原因</FieldDescription></Field>
-  <Field><FieldLabel htmlFor="service-rule-maint-tpl">独立维护事件说明模板</FieldLabel><Textarea id="service-rule-maint-tpl" rows={2} maxLength={500} value={serviceDraft.rules.maintenanceMessageTemplate} onChange={e=>setServiceDraft({...serviceDraft,rules:{...serviceDraft.rules,maintenanceMessageTemplate:e.target.value}})} placeholder="例如：检测到 {service} 进入维护状态已持续超过 {minutes} 分钟..."/><FieldDescription>占位符：<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">&#123;service&#125;</code> 服务名、<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">&#123;minutes&#125;</code> 分钟</FieldDescription></Field>
-  <Field><FieldLabel htmlFor="service-rule-recov-tpl">独立恢复正常说明模板</FieldLabel><Textarea id="service-rule-recov-tpl" rows={2} maxLength={500} value={serviceDraft.rules.recoveryMessageTemplate} onChange={e=>setServiceDraft({...serviceDraft,rules:{...serviceDraft.rules,recoveryMessageTemplate:e.target.value}})} placeholder="例如：检测到 {service} 服务已持续恢复正常运行满 {minutes} 分钟..."/><FieldDescription>占位符：<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">&#123;service&#125;</code> 服务名、<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">&#123;minutes&#125;</code> 分钟</FieldDescription></Field>
-  </div>}
-  {formError&&<p className="form-error" role="alert">{formError}</p>}</FieldGroup><DialogFooter className="mt-2"><Button type="button" variant="outline" disabled={busy} onClick={()=>setServiceDraft(null)}>取消</Button><Button disabled={busy} type="submit">{busy&&<LoaderCircle data-icon="inline-start" className="animate-spin"/>}{busy?"保存并检测中…":"保存服务配置"}</Button></DialogFooter></form>}</DialogContent></Dialog>
+  <Dialog open={serviceDraft!==null} onOpenChange={open=>{if(!open&&!busy)setServiceDraft(null);}}>
+    <DialogContent className="service-editor-dialog sm:max-w-xl">
+      <DialogHeader>
+        <DialogTitle>{serviceDraft?.id?"编辑服务":"添加服务"}</DialogTitle>
+        <DialogDescription>配置服务的检测地址与自动发布规则。</DialogDescription>
+      </DialogHeader>
+      {serviceDraft && <>
+        <form id="service-editor-form" onSubmit={saveService} className="editor-body service-editor-body">
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="service-name">服务名称</FieldLabel>
+              <Input id="service-name" value={serviceDraft.name} disabled={busy} onChange={e=>setServiceDraft({...serviceDraft,name:e.target.value})} maxLength={80} required placeholder="填写服务名称"/>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="service-url">服务地址</FieldLabel>
+              <Input id="service-url" value={serviceDraft.url} disabled={busy} onChange={e=>setServiceDraft({...serviceDraft,url:e.target.value})} type="url" required placeholder="https://你的服务域名/healthz"/>
+              <FieldDescription>填写完整地址；没有 /healthz 时会自动补全。</FieldDescription>
+            </Field>
+            <Separator className="h-px w-full"/>
+            <Field>
+              <FieldLabel htmlFor="service-rule-mode">自动发布规则</FieldLabel>
+              <Select id="service-rule-mode" disabled={busy} value={serviceDraft.useCustomRules?"custom":"global"} onValueChange={val=>setServiceDraft({...serviceDraft,useCustomRules:val==="custom"})}>
+                <SelectTrigger id="service-rule-mode" className="w-full"><SelectValue/></SelectTrigger>
+                <SelectContent><SelectGroup>
+                  <SelectItem value="global" label="跟随全局规则">跟随全局规则</SelectItem>
+                  <SelectItem value="custom" label="为此服务独立设置">为此服务独立设置</SelectItem>
+                </SelectGroup></SelectContent>
+              </Select>
+              <FieldDescription>{serviceDraft.useCustomRules?"仅对当前服务生效，不随全局规则变动。":`使用全局配置：异常 ${activeRules.errorThresholdMinutes} 分钟 / 维护 ${activeRules.maintenanceThresholdMinutes} 分钟 / 恢复 ${activeRules.recoveryThresholdMinutes} 分钟。`}</FieldDescription>
+            </Field>
+            {serviceDraft.useCustomRules && <section className="service-custom-rules" aria-labelledby="service-custom-rules-title">
+              <div className="rules-section-caption">
+                <h3 id="service-custom-rules-title">独立规则</h3>
+                <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={()=>setServiceDraft({...serviceDraft,rules:{...activeRules}})}>
+                  <RotateCcw data-icon="inline-start"/>载入全局当前值
+                </Button>
+              </div>
+              <AutoPublishRuleFields idPrefix="service-rule" rules={serviceDraft.rules} busy={busy} onChange={rules=>setServiceDraft({...serviceDraft,rules})}/>
+            </section>}
+            {formError&&<p className="form-error" role="alert">{formError}</p>}
+          </FieldGroup>
+        </form>
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={busy} onClick={()=>setServiceDraft(null)}>取消</Button>
+          <Button disabled={busy} type="submit" form="service-editor-form">{busy&&<LoaderCircle data-icon="inline-start" className="animate-spin"/>}{busy?"保存并检测中…":"保存服务配置"}</Button>
+        </DialogFooter>
+      </>}
+    </DialogContent>
+  </Dialog>
 
   <Dialog open={eventDraft!==null} onOpenChange={open=>{if(!open&&!busy)setEventDraft(null);}}><DialogContent className="event-editor-dialog sm:max-w-2xl"><DialogHeader><DialogTitle>{eventDraft?.id?"编辑事件":"新建事件"}</DialogTitle><DialogDescription>保存草稿后仅自己可见，发布后会出现在状态页。</DialogDescription></DialogHeader>{eventDraft&&<><div className="editor-body"><FieldGroup><Field><FieldLabel htmlFor="event-title">事件标题</FieldLabel><Input id="event-title" maxLength={160} value={eventDraft.title} onChange={e=>setEventDraft({...eventDraft,title:e.target.value})} placeholder="填写公告或事件标题"/></Field><div className="editor-options"><Field><FieldLabel htmlFor="event-service">关联服务</FieldLabel><Select id="event-service" value={eventDraft.serviceId||"none"} onValueChange={val=>setEventDraft({...eventDraft,serviceId:val==="none"?"":(val??"")})}><SelectTrigger id="event-service" className="w-full"><SelectValue placeholder="全站公告 / 不关联服务"/></SelectTrigger><SelectContent><SelectItem value="none">全站公告 / 不关联服务</SelectItem>{data?.services.map(service=><SelectItem value={service.id} key={service.id}>{service.name}</SelectItem>)}</SelectContent></Select></Field><Field><FieldLabel htmlFor="event-resolved">事件进度</FieldLabel><Select id="event-resolved" value={eventDraft.resolved?"resolved":"active"} onValueChange={val=>setEventDraft({...eventDraft,resolved:val==="resolved"})}><SelectTrigger id="event-resolved" className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="active">进行中</SelectItem><SelectItem value="resolved">已结束</SelectItem></SelectContent></Select></Field></div></FieldGroup>
       <Field className="mt-5"><FieldLabel htmlFor="event-color">公告颜色</FieldLabel><Select id="event-color" value={eventDraft.color??"yellow"} onValueChange={val=>setEventDraft({...eventDraft,color:(val as "red"|"yellow")??"yellow"})}><SelectTrigger id="event-color" className="w-full sm:w-80"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="yellow">黄色 · 提醒 / 维护</SelectItem><SelectItem value="red">红色 · 故障 / 异常</SelectItem></SelectContent></Select><FieldDescription>进行中的已发布事件会常驻首页上方；结束或撤回后移出顶部。</FieldDescription></Field>

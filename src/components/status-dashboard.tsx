@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MotionConfig } from "framer-motion";
-import { ArrowUpRight, Server, TriangleAlert } from "lucide-react";
+import { Server, TriangleAlert } from "lucide-react";
 import { useHeaderRefresh } from "./status-chrome";
 import { HealthLabel, DisplayTime } from "./health-label";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
@@ -89,6 +89,5 @@ export function StatusDashboard({initial}: {initial: PublicState}) {
       </div>
     )}
     {data.services.length ? <ServiceHistory services={data.services} now={data.generatedAt} /> : <section className="system-panel"><Empty><EmptyHeader><EmptyMedia variant="icon"><Server /></EmptyMedia><EmptyTitle>尚未添加服务</EmptyTitle><EmptyDescription>添加服务后，这里会显示实际检测状态。</EmptyDescription></EmptyHeader></Empty></section>}
-    <Link href="/history" className="history-all-link">查看全部事件历史<ArrowUpRight className="size-4"/></Link>
   </main></div></MotionConfig>;
 }

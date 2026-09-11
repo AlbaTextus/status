@@ -14,16 +14,25 @@
 
 .home-footer-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr;
-  gap: 48px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 38px 130px;
   padding-bottom: 48px;
 }
 
 .home-footer-brand {
+  position: relative;
+  top: -10px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: 12px;
 }
+
+.home-footer > .home-container { container-type: inline-size; }
+.home-footer-github { display: inline-flex; align-items: center; min-height: 40px; color: var(--muted-foreground); transition: color 160ms ease; }
+.home-footer-github:hover { color: var(--foreground); }
+.home-footer-github:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 4px; }
 
 .home-footer-wordmark {
   display: inline-block;
@@ -53,17 +62,27 @@
 }
 
 .home-footer-column > a {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   color: var(--muted-foreground);
   font-size: 12px;
   text-decoration: none;
-  transition: color 160ms ease;
+  transition: color 180ms ease, transform 220ms ease;
 }
 
-.home-footer-column > a:hover {
+.home-footer-column > a:is(:hover, :focus-visible) {
   color: var(--foreground);
+  transform: translateX(3px);
+}
+
+.home-footer-column > a::after { content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform 220ms ease; }
+.home-footer-column > a:is(:hover, :focus-visible)::after { transform: scaleX(1); }
+.home-footer-column > a:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .home-footer-column > a, .home-footer-column > a::after { transition: none; }
+  .home-footer-column > a:is(:hover, :focus-visible) { transform: none; }
 }
 
 .home-footer-projects {
@@ -83,7 +102,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  padding-block: 32px;
+  padding-block: 32px 12px;
   color: #727580;
   font-size: 13px;
 }
@@ -106,16 +125,15 @@
 }
 
 .home-footer-watermark {
-  overflow: hidden;
-  height: clamp(55px, 9vw, 140px);
-  padding-top: 8px;
+  padding-block: 0 24px;
   color: #f8f8f9;
   font-family: Arial, sans-serif;
-  font-size: clamp(44px, 13vw, 200px);
+  font-size: min(14cqi, 200px);
   font-weight: 800;
   letter-spacing: -.055em;
-  line-height: 1;
+  line-height: 1.1;
   text-align: center;
+  white-space: nowrap;
   user-select: none;
   pointer-events: none;
 }
@@ -135,11 +153,7 @@
 
 @media (max-width: 900px) {
   .home-footer-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 38px 50px;
-  }
-  .home-footer-brand {
-    grid-column: 1 / -1;
+    column-gap: clamp(40px, 10vw, 130px);
   }
 }
 
@@ -151,6 +165,7 @@
     padding-top: 38px;
   }
   .home-footer-grid {
+    grid-template-columns: minmax(0, 1fr);
     gap: 35px 20px;
     padding-bottom: 35px;
   }

@@ -76,39 +76,42 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
             } else {
               const failingMs = Date.now() - new Date(current.failingSince).getTime();
               if (failingMs >= errorMs) {
-                const alreadyPublishedForEpisode = current.lastAutoIncidentAt &&
-                  new Date(current.lastAutoIncidentAt).getTime() >= new Date(current.failingSince).getTime();
+                const activeIncidents = state.incidents.filter(
+                  inc => inc.serviceId === current.id && !inc.resolved && inc.published
+                );
 
-                if (!alreadyPublishedForEpisode) {
-                  const activeIncident = state.incidents.find(
-                    inc => inc.serviceId === current.id && !inc.resolved && inc.published
+                if (activeIncidents.length > 0) {
+                  // 如果已有进行中的事态，检查是否有未升级为故障的维护事态
+                  const maintenanceIncident = activeIncidents.find(inc =>
+                    inc.color === "yellow" && !inc.updates.some(u => u.status === "outage")
                   );
 
-                  if (activeIncident) {
-                    const isMaintenanceIncident =
-                      activeIncident.id === current.autoMaintenanceIncidentId ||
-                      activeIncident.color === "yellow" ||
-                      activeIncident.title.includes("维护");
+                  if (maintenanceIncident) {
+                    maintenanceIncident.title = maintenanceIncident.title.includes("维护")
+                      ? maintenanceIncident.title.replace(/计划维护|维护/, "服务异常")
+                      : `${current.name} 服务异常`;
+                    maintenanceIncident.color = "red";
+                    maintenanceIncident.updatedAt = nowIso;
+                    maintenanceIncident.updates.unshift({
+                      id: crypto.randomUUID(),
+                      label: "服务异常",
+                      message: `检测到 ${current.name} 在维护期间出现异常并已持续超过 ${rules.errorThresholdMinutes} 分钟（${result.message}），事态已升级为红色预警。`,
+                      createdAt: nowIso,
+                      status: "outage",
+                    });
 
-                    if (isMaintenanceIncident) {
-                      // 衔接维护的发布：在同一个事态里发布，并更换相对应的标题
-                      activeIncident.title = activeIncident.title.includes("维护")
-                        ? activeIncident.title.replace(/计划维护|维护/, "服务异常")
-                        : `${current.name} 服务异常`;
-                      activeIncident.color = "red";
-                      activeIncident.updatedAt = nowIso;
-                      activeIncident.updates.unshift({
-                        id: crypto.randomUUID(),
-                        label: "服务异常",
-                        message: `检测到 ${current.name} 在维护期间出现异常并已持续超过 ${rules.errorThresholdMinutes} 分钟（${result.message}），事态已升级为红色预警。`,
-                        createdAt: nowIso,
-                        status: "outage",
-                      });
-
-                      current.lastAutoIncidentAt = nowIso;
-                      current.autoMaintenanceIncidentId = activeIncident.id;
-                    }
+                    current.lastAutoIncidentAt = nowIso;
+                    current.autoMaintenanceIncidentId = null;
                   } else {
+                    // 已有红色故障事态或已升级，绝不重复发布或追加重复动态
+                    current.lastAutoIncidentAt = current.lastAutoIncidentAt ?? nowIso;
+                    current.autoMaintenanceIncidentId = null;
+                  }
+                } else {
+                  const alreadyPublishedForEpisode = current.lastAutoIncidentAt &&
+                    new Date(current.lastAutoIncidentAt).getTime() >= new Date(current.failingSince).getTime();
+
+                  if (!alreadyPublishedForEpisode) {
                     const autoIncident: Incident = {
                       id: crypto.randomUUID(),
                       title: `${current.name} 服务异常`,
@@ -134,14 +137,13 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
                     };
                     state.incidents.unshift(autoIncident);
                     current.lastAutoIncidentAt = nowIso;
-                    current.autoMaintenanceIncidentId = autoIncident.id;
+                    current.autoMaintenanceIncidentId = null;
                   }
                 }
               }
             }
           } else {
             current.failingSince = null;
-            current.lastAutoIncidentAt = null;
           }
 
           // 2. Maintenance tracking (进入维护界面持续超过设定阈值自动发布维护事态)
@@ -189,50 +191,57 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
                 }
               }
             }
+          } else {
+            current.maintenanceSince = null;
           }
 
           // 3. Operational recovery tracking (检测到正常服务后持续满设定阈值自动取消维护/异常事态)
           if (result.status === "operational") {
-            const activeIncidentToResolve = state.incidents.find(inc =>
-              inc.id === current.autoMaintenanceIncidentId && inc.serviceId === current.id && inc.published && !inc.resolved
-            ) ?? state.incidents.find(inc =>
-              inc.serviceId === current.id && inc.published && !inc.resolved &&
-              (inc.title.includes("服务异常") || inc.title.includes("计划维护"))
+            current.failingSince = null;
+            current.maintenanceSince = null;
+
+            const activeIncidentsToResolve = state.incidents.filter(inc =>
+              inc.serviceId === current.id && inc.published && !inc.resolved
             );
 
-            if (activeIncidentToResolve) {
-              // Keep the persisted link in sync when recovering a legacy incident.
-              // The admin recovery indicator also consumes this association.
-              current.autoMaintenanceIncidentId = activeIncidentToResolve.id;
+            if (activeIncidentsToResolve.length > 0) {
               if (!current.maintenanceRecoveringSince) {
                 current.maintenanceRecoveringSince = result.checkedAt ?? nowIso;
               } else {
                 const recoveringMs = Date.now() - new Date(current.maintenanceRecoveringSince).getTime();
                 if (recoveringMs >= recoveryMsThreshold) {
-                  activeIncidentToResolve.resolved = true;
-                  activeIncidentToResolve.updatedAt = nowIso;
-                  const isRed = activeIncidentToResolve.color === "red" || activeIncidentToResolve.title.includes("异常");
-                  const incidentType = isRed ? "服务异常事态" : "维护事态";
-                  let recoveryMsg = formatTemplate(rules.recoveryMessageTemplate, {
-                    service: current.name,
-                    minutes: rules.recoveryThresholdMinutes,
-                    incidentType,
-                  });
-                  if (recoveryMsg.includes("相关事态")) {
-                    recoveryMsg = recoveryMsg.replace("相关事态", incidentType);
+                  for (const incident of activeIncidentsToResolve) {
+                    incident.resolved = true;
+                    incident.updatedAt = nowIso;
+                    const isRed = incident.color === "red" ||
+                      incident.updates.some(u => u.status === "outage") ||
+                      incident.title.includes("异常");
+                    const incidentType = isRed ? "服务异常事态" : "维护事态";
+                    let recoveryMsg = formatTemplate(rules.recoveryMessageTemplate, {
+                      service: current.name,
+                      minutes: rules.recoveryThresholdMinutes,
+                      incidentType,
+                    });
+                    if (recoveryMsg.includes("相关事态")) {
+                      recoveryMsg = recoveryMsg.replace("相关事态", incidentType);
+                    }
+                    if (!incident.updates.some(u => u.status === "resolved")) {
+                      incident.updates.unshift({
+                        id: crypto.randomUUID(),
+                        label: "已恢复",
+                        message: recoveryMsg,
+                        createdAt: nowIso,
+                        status: "resolved",
+                      });
+                    }
                   }
-                  activeIncidentToResolve.updates.unshift({
-                    id: crypto.randomUUID(),
-                    label: "已恢复",
-                    message: recoveryMsg,
-                    createdAt: nowIso,
-                    status: "resolved",
-                  });
 
                   current.maintenanceSince = null;
                   current.lastAutoMaintenanceAt = null;
                   current.autoMaintenanceIncidentId = null;
                   current.maintenanceRecoveringSince = null;
+                  current.failingSince = null;
+                  current.lastAutoIncidentAt = null;
                 }
               }
             } else {
@@ -240,6 +249,8 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
               current.lastAutoMaintenanceAt = null;
               current.autoMaintenanceIncidentId = null;
               current.maintenanceRecoveringSince = null;
+              current.failingSince = null;
+              current.lastAutoIncidentAt = null;
             }
           }
         }
