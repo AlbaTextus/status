@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MotionConfig } from "framer-motion";
 import { ArrowUpRight, Server, TriangleAlert } from "lucide-react";
-import { StatusFooter, StatusHeader } from "./status-chrome";
+import { useHeaderRefresh } from "./status-chrome";
 import { HealthLabel, DisplayTime } from "./health-label";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "./ui/empty";
@@ -15,11 +15,19 @@ export function StatusDashboard({initial}: {initial: PublicState}) {
   const [data,setData] = useState(initial);
   const [error,setError] = useState("");
   const [loading,setLoading] = useState(false);
+  const { setRefreshHandler } = useHeaderRefresh();
+
   async function refresh() { setLoading(true); try { const response = await fetch("/api/status",{cache:"no-store"}); if(!response.ok) throw new Error(); setData(await response.json()); setError(""); } catch { setError("暂时无法获取最新状态，以下为上次成功读取的结果。"); } finally {setLoading(false);} }
+
+  useEffect(() => {
+    setRefreshHandler({ onRefresh: refresh, refreshing: loading });
+    return () => setRefreshHandler(null);
+  }, [loading, setRefreshHandler]);
+
   useEffect(() => { let active=true; const controller=new AbortController(); const timer=setInterval(async()=>{try {const response=await fetch("/api/status",{cache:"no-store",signal:controller.signal}); if(!response.ok) throw new Error();const next:PublicState=await response.json();if(active){setData(next);setError("");}}catch{if(active)setError("暂时无法获取最新状态，以下为上次成功读取的结果。");}},10000);return()=>{active=false;controller.abort();clearInterval(timer);};},[]);
   const aggregate = data.services.some(s=>s.result.status==="error") ? "error" : data.services.some(s=>s.result.status==="maintenance") ? "maintenance" : data.services.some(s=>s.result.status==="unknown") || !data.services.length ? "unknown" : "operational";
   const activeIncidents = data.incidents.filter(incident=>incident.published&&!incident.resolved);
-  return <MotionConfig reducedMotion="user"><StatusHeader onRefresh={refresh} refreshing={loading} /><div className="status-shell"><main>
+  return <MotionConfig reducedMotion="user"><div className="status-shell"><main>
     <div className="page-heading status-page-heading"><div><h1>服务状态</h1></div></div>
     {error && <Alert variant="destructive" className="mb-5"><AlertTitle>状态读取失败</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
     {activeIncidents.length ? (
@@ -82,5 +90,5 @@ export function StatusDashboard({initial}: {initial: PublicState}) {
     )}
     {data.services.length ? <ServiceHistory services={data.services} now={data.generatedAt} /> : <section className="system-panel"><Empty><EmptyHeader><EmptyMedia variant="icon"><Server /></EmptyMedia><EmptyTitle>尚未添加服务</EmptyTitle><EmptyDescription>添加服务后，这里会显示实际检测状态。</EmptyDescription></EmptyHeader></Empty></section>}
     <Link href="/history" className="history-all-link">查看全部事件历史<ArrowUpRight className="size-4"/></Link>
-  </main><StatusFooter /></div></MotionConfig>;
+  </main></div></MotionConfig>;
 }

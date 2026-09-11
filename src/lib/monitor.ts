@@ -1,9 +1,19 @@
 import { mutateStore, readStore } from "./store";
-import type { HealthResult, Incident, Service } from "./types";
+import { defaultAutoPublishRules, type HealthResult, type Incident, type Service } from "./types";
 import { recordHealth, recordTimelineHealth } from "./history";
 
 import { getDatabase } from "./cloudflare";
 import type { D1Database } from "@cloudflare/workers-types";
+
+function formatTemplate(template: string, vars: { service: string; minutes: number; reason?: string; incidentType?: string }): string {
+  return template
+    .replace(/\{service\}/g, vars.service)
+    .replace(/\{minutes\}/g, String(vars.minutes))
+    .replace(/\{time\}/g, String(vars.minutes))
+    .replace(/\{reason\}/g, vars.reason ?? "")
+    .replace(/\{message\}/g, vars.reason ?? "")
+    .replace(/\{incidentType\}/g, vars.incidentType ?? "事态");
+}
 
 export async function probe(service: Pick<Service, "url">): Promise<HealthResult> {
   const started = performance.now();
@@ -35,7 +45,7 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
     if (!results.length) return;
     await mutateStore(state => {
       const nowIso = new Date().toISOString();
-      const FIVE_MINUTES_MS = 5 * 60 * 1000;
+      const globalRules = state.rules ?? defaultAutoPublishRules;
 
       for (const { service, result } of results) {
         const current = state.services.find(item => item.id === service.id);
@@ -44,7 +54,19 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
           current.history = recordHealth(current.history ?? [], result);
           current.timeline = recordTimelineHealth(current.timeline ?? [], result);
 
-          // 1. Error tracking (连续异常超过 5 分钟自动发布红色事态)
+          const rules = current.rules ?? globalRules;
+          const errorMs = rules.errorThresholdMinutes * 60 * 1000;
+          const maintenanceMsThreshold = rules.maintenanceThresholdMinutes * 60 * 1000;
+          const recoveryMsThreshold = rules.recoveryThresholdMinutes * 60 * 1000;
+
+          if (!rules.enabled) {
+            current.failingSince = null;
+            current.maintenanceSince = null;
+            current.maintenanceRecoveringSince = null;
+            continue;
+          }
+
+          // 1. Error tracking (连续异常超过设定阈值自动发布红色事态)
           if (result.status === "error") {
             current.maintenanceRecoveringSince = null;
             current.maintenanceSince = null;
@@ -53,7 +75,7 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
               current.failingSince = result.checkedAt ?? nowIso;
             } else {
               const failingMs = Date.now() - new Date(current.failingSince).getTime();
-              if (failingMs >= FIVE_MINUTES_MS) {
+              if (failingMs >= errorMs) {
                 const alreadyPublishedForEpisode = current.lastAutoIncidentAt &&
                   new Date(current.lastAutoIncidentAt).getTime() >= new Date(current.failingSince).getTime();
 
@@ -78,7 +100,7 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
                       activeIncident.updates.unshift({
                         id: crypto.randomUUID(),
                         label: "服务异常",
-                        message: `检测到 ${current.name} 在维护期间出现异常并已持续超过 5 分钟（${result.message}），事态已升级为红色预警。`,
+                        message: `检测到 ${current.name} 在维护期间出现异常并已持续超过 ${rules.errorThresholdMinutes} 分钟（${result.message}），事态已升级为红色预警。`,
                         createdAt: nowIso,
                         status: "outage",
                       });
@@ -100,7 +122,11 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
                         {
                           id: crypto.randomUUID(),
                           label: "服务异常",
-                          message: `检测到 ${current.name} 持续异常已超过 5 分钟（${result.message}），系统已自动发布红色预警事态。`,
+                          message: formatTemplate(rules.errorMessageTemplate, {
+                            service: current.name,
+                            minutes: rules.errorThresholdMinutes,
+                            reason: result.message,
+                          }),
                           createdAt: nowIso,
                           status: "outage",
                         },
@@ -118,7 +144,7 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
             current.lastAutoIncidentAt = null;
           }
 
-          // 2. Maintenance tracking (进入维护界面持续超过 5 分钟自动发布维护事态)
+          // 2. Maintenance tracking (进入维护界面持续超过设定阈值自动发布维护事态)
           if (result.status === "maintenance") {
             current.maintenanceRecoveringSince = null;
 
@@ -126,7 +152,7 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
               current.maintenanceSince = result.checkedAt ?? nowIso;
             } else {
               const maintenanceMs = Date.now() - new Date(current.maintenanceSince).getTime();
-              if (maintenanceMs >= FIVE_MINUTES_MS) {
+              if (maintenanceMs >= maintenanceMsThreshold) {
                 const hasActiveIncident = state.incidents.some(
                   inc => inc.serviceId === current.id && !inc.resolved && inc.published
                 );
@@ -147,7 +173,11 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
                       {
                         id: crypto.randomUUID(),
                         label: "计划维护",
-                        message: `检测到 ${current.name} 进入维护状态已持续超过 5 分钟，系统已自动发布维护事态。`,
+                        message: formatTemplate(rules.maintenanceMessageTemplate, {
+                          service: current.name,
+                          minutes: rules.maintenanceThresholdMinutes,
+                          reason: result.message,
+                        }),
                         createdAt: nowIso,
                         status: "monitoring",
                       },
@@ -161,7 +191,7 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
             }
           }
 
-          // 3. Operational recovery tracking (检测到正常服务后持续满 5 分钟自动取消维护/异常事态)
+          // 3. Operational recovery tracking (检测到正常服务后持续满设定阈值自动取消维护/异常事态)
           if (result.status === "operational") {
             const activeIncidentToResolve = state.incidents.find(inc =>
               inc.id === current.autoMaintenanceIncidentId && inc.serviceId === current.id && inc.published && !inc.resolved
@@ -178,14 +208,23 @@ export async function checkServices(ids?: string[], database?: D1Database): Prom
                 current.maintenanceRecoveringSince = result.checkedAt ?? nowIso;
               } else {
                 const recoveringMs = Date.now() - new Date(current.maintenanceRecoveringSince).getTime();
-                if (recoveringMs >= FIVE_MINUTES_MS) {
+                if (recoveringMs >= recoveryMsThreshold) {
                   activeIncidentToResolve.resolved = true;
                   activeIncidentToResolve.updatedAt = nowIso;
                   const isRed = activeIncidentToResolve.color === "red" || activeIncidentToResolve.title.includes("异常");
+                  const incidentType = isRed ? "服务异常事态" : "维护事态";
+                  let recoveryMsg = formatTemplate(rules.recoveryMessageTemplate, {
+                    service: current.name,
+                    minutes: rules.recoveryThresholdMinutes,
+                    incidentType,
+                  });
+                  if (recoveryMsg.includes("相关事态")) {
+                    recoveryMsg = recoveryMsg.replace("相关事态", incidentType);
+                  }
                   activeIncidentToResolve.updates.unshift({
                     id: crypto.randomUUID(),
                     label: "已恢复",
-                    message: `检测到 ${current.name} 服务已持续恢复正常运行满 5 分钟，${isRed ? "服务异常事态" : "维护事态"}已自动取消并恢复。`,
+                    message: recoveryMsg,
                     createdAt: nowIso,
                     status: "resolved",
                   });

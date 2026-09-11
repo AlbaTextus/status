@@ -1,7 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { mutateStore } from "./store";
 import { checkServices } from "./monitor";
-import { unchecked, type IncidentUpdate } from "./types";
+import { unchecked, type IncidentUpdate, defaultAutoPublishRules, type AutoPublishRules } from "./types";
 import { getStatusEnv } from "./cloudflare";
 
 export class AdminError extends Error { constructor(message: string, public status = 400) { super(message); } }
@@ -21,6 +21,26 @@ export async function authorize(request: Request) {
 }
 const object = (value: unknown): Record<string, unknown> => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new AdminError("请求格式无效"); return value as Record<string, unknown>; };
 function text(value: unknown, name: string, max = 160) { if (typeof value !== "string" || !value.trim() || value.trim().length > max) throw new AdminError(`${name}不能为空，且最多 ${max} 个字符`); return value.trim(); }
+function positiveInteger(value: unknown, name: string, min = 1, max = 1440): number {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < min || num > max) throw new AdminError(`${name}必须是 ${min} 到 ${max} 之间的整数`);
+  return num;
+}
+
+export function parseRules(input: unknown): AutoPublishRules | null {
+  if (input === null || input === undefined) return null;
+  const r = object(input);
+  return {
+    enabled: typeof r.enabled === "boolean" ? r.enabled : true,
+    errorThresholdMinutes: positiveInteger(r.errorThresholdMinutes, "异常自动发布时间"),
+    maintenanceThresholdMinutes: positiveInteger(r.maintenanceThresholdMinutes, "维护自动发布时间"),
+    recoveryThresholdMinutes: positiveInteger(r.recoveryThresholdMinutes, "恢复正常解除时间"),
+    errorMessageTemplate: text(r.errorMessageTemplate, "异常发布说明", 500),
+    maintenanceMessageTemplate: text(r.maintenanceMessageTemplate, "维护发布说明", 500),
+    recoveryMessageTemplate: text(r.recoveryMessageTemplate, "恢复解除说明", 500),
+  };
+}
+
 export function normalizeHealthUrl(value: unknown) {
   let url: URL;
   try { url = new URL(text(value, "服务地址", 2048)); } catch { throw new AdminError("请填写有效的 http:// 或 https:// 服务地址"); }
@@ -37,17 +57,19 @@ export async function adminAction(input: unknown) {
       const name = text(data.name, "服务名称", 80);
       const url = normalizeHealthUrl(data.url);
       const id = typeof data.id === "string" ? data.id : randomUUID();
+      const rules = parseRules(data.rules);
       await mutateStore(state => {
         const existing = state.services.find(service => service.id === id);
         if (data.id && !existing) throw new AdminError("服务不存在", 404);
         if (state.services.some(service => service.id !== id && (service.url === url || service.name === name))) throw new AdminError("服务名称或检测地址已存在");
         if (!existing && state.services.length >= 50) throw new AdminError("最多支持 50 个服务");
-        const next = { id, name, url, revision: randomUUID(), result: existing?.url === url ? existing.result : { ...unchecked } };
+        const next = { id, name, url, revision: randomUUID(), result: existing?.url === url ? existing.result : { ...unchecked }, rules };
         if (existing) Object.assign(existing, next); else state.services.push(next);
       });
       await checkServices([id]);
       break;
     }
+
     case "deleteService":
       await mutateStore(state => { const id = text(data.id, "服务 ID"); if (!state.services.some(item => item.id === id)) throw new AdminError("服务不存在", 404); state.services = state.services.filter(item => item.id !== id); state.incidents.forEach(incident => { if (incident.serviceId === id) incident.serviceId = null; }); }); break;
     case "check": {
@@ -100,6 +122,20 @@ export async function adminAction(input: unknown) {
     }
     case "deleteIncident":
       await mutateStore(state => { const id = text(data.id, "事件 ID"); if (!state.incidents.some(item => item.id === id)) throw new AdminError("事件不存在", 404); state.incidents = state.incidents.filter(item => item.id !== id); }); break;
+    case "saveRules": {
+      const rules = parseRules(data);
+      if (!rules) throw new AdminError("规则数据无效");
+      await mutateStore(state => {
+        state.rules = rules;
+      });
+      break;
+    }
+    case "resetRules": {
+      await mutateStore(state => {
+        state.rules = { ...defaultAutoPublishRules };
+      });
+      break;
+    }
     default: throw new AdminError("未知操作");
   }
 }

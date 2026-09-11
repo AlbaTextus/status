@@ -1,18 +1,43 @@
 import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
-import type { Store } from "./types";
+import { defaultAutoPublishRules, type Store } from "./types";
 
 type RecordRow = { kind: "service" | "incident"; id: string; data: string };
-type RevisionRow = { revision: number };
+type MetaRow = { revision: number; rules?: string | null };
 
 async function snapshot(db: D1Database) {
   // D1 batch gives the revision and records a consistent transactional snapshot.
-  const [metadata, records] = await db.batch([
-    db.prepare("SELECT revision FROM status_meta WHERE id = 1"),
-    db.prepare("SELECT kind, id, data FROM status_records ORDER BY kind, position, id"),
-  ]);
-  const revision = (metadata.results[0] as RevisionRow | undefined)?.revision;
+  let metadata: { results: unknown[] };
+  let records: { results: unknown[] };
+  try {
+    const batchRes = await db.batch([
+      db.prepare("SELECT revision, rules FROM status_meta WHERE id = 1"),
+      db.prepare("SELECT kind, id, data FROM status_records ORDER BY kind, position, id"),
+    ]);
+    metadata = batchRes[0];
+    records = batchRes[1];
+  } catch {
+    // If rules column doesn't exist yet, auto-add it and retry
+    await db.prepare("ALTER TABLE status_meta ADD COLUMN rules TEXT").run().catch(() => {});
+    const batchRes = await db.batch([
+      db.prepare("SELECT revision, rules FROM status_meta WHERE id = 1"),
+      db.prepare("SELECT kind, id, data FROM status_records ORDER BY kind, position, id"),
+    ]);
+    metadata = batchRes[0];
+    records = batchRes[1];
+  }
+
+  const meta = metadata.results[0] as MetaRow | undefined;
+  const revision = meta?.revision;
   if (revision === undefined) throw new Error("D1 尚未初始化，请运行 db:migrate:local 或 db:migrate:remote");
-  const state: Store = { version: 1, services: [], incidents: [] };
+  let rules = { ...defaultAutoPublishRules };
+  if (meta?.rules) {
+    try {
+      rules = { ...defaultAutoPublishRules, ...JSON.parse(meta.rules) };
+    } catch {
+      rules = { ...defaultAutoPublishRules };
+    }
+  }
+  const state: Store = { version: 1, services: [], incidents: [], rules };
   for (const row of records.results as RecordRow[]) {
     if (row.kind === "service") state.services.push(JSON.parse(row.data));
     else state.incidents.push(JSON.parse(row.data));
@@ -55,10 +80,14 @@ export async function mutateDatabase<T>(db: D1Database, change: (state: Store) =
     }
     // All writes, including the final CAS, are guarded by the same revision.
     // D1's atomic batch either applies against this snapshot or makes no changes.
-    statements.push(db.prepare("UPDATE status_meta SET revision = revision + 1 WHERE id = 1 AND revision = ?").bind(revision));
+    statements.push(
+      db.prepare("UPDATE status_meta SET revision = revision + 1, rules = ? WHERE id = 1 AND revision = ?")
+        .bind(JSON.stringify(state.rules ?? defaultAutoPublishRules), revision)
+    );
     const committed = await db.batch(statements);
     if (committed[committed.length - 1].meta.changes === 1) return result;
     await new Promise(resolve => setTimeout(resolve, 10 + Math.random() * 30 * (attempt + 1)));
   }
   throw new Error("数据库正在处理其他写入，请重试");
 }
+

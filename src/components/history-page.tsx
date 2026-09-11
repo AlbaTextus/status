@@ -2,8 +2,7 @@
 import { useState, useMemo } from "react";
 
 import Link from "next/link";
-import { CalendarIcon, ChevronDown, FileText } from "lucide-react";
-import { StatusHeader, StatusFooter } from "./status-chrome";
+import { CalendarIcon, CheckCircle2, ChevronDown, FileText } from "lucide-react";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -14,6 +13,94 @@ import type { PublicState, Incident } from "@/lib/types";
 import { zhCN } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { resolveIncidentColor } from "@/lib/incident-status";
+import { cn } from "cn";
+
+type HistoryDayEntry = {
+  type: "day";
+  date: string;
+  dayNum: string;
+  weekday: string;
+  items: Incident[];
+};
+
+type HistoryRangeEntry = {
+  type: "range";
+  key: string;
+  startDate: string;
+  endDate: string;
+  startDayNum: string;
+  endDayNum: string;
+  daysCount: number;
+  days: {
+    date: string;
+    dayNum: string;
+    weekday: string;
+  }[];
+};
+
+type HistoryEntry = HistoryDayEntry | HistoryRangeEntry;
+
+function groupMonthDays(days: Map<string, Incident[]>): HistoryEntry[] {
+  const entries: HistoryEntry[] = [];
+  const entriesList = [...days.entries()];
+
+  let emptyRun: { date: string; dayNum: string; weekday: string }[] = [];
+
+  const flushEmptyRun = () => {
+    if (emptyRun.length === 0) return;
+    if (emptyRun.length >= 7) {
+      const latest = emptyRun[0];
+      const earliest = emptyRun[emptyRun.length - 1];
+      entries.push({
+        type: "range",
+        key: `${earliest.date}_${latest.date}`,
+        startDate: earliest.date,
+        endDate: latest.date,
+        startDayNum: earliest.dayNum,
+        endDayNum: latest.dayNum,
+        daysCount: emptyRun.length,
+        days: [...emptyRun],
+      });
+    } else {
+      for (const day of emptyRun) {
+        entries.push({
+          type: "day",
+          date: day.date,
+          dayNum: day.dayNum,
+          weekday: day.weekday,
+          items: [],
+        });
+      }
+    }
+    emptyRun = [];
+  };
+
+  for (const [date, items] of entriesList) {
+    const dt = new Date(`${date}T12:00:00Z`);
+    const dayNum = date.slice(8);
+    const weekday = dt.toLocaleDateString("zh-CN", { weekday: "short", timeZone: "UTC" });
+
+    if (items.length > 0) {
+      flushEmptyRun();
+      entries.push({
+        type: "day",
+        date,
+        dayNum,
+        weekday,
+        items,
+      });
+    } else {
+      emptyRun.push({
+        date,
+        dayNum,
+        weekday,
+      });
+    }
+  }
+
+  flushEmptyRun();
+  return entries;
+}
 
 function parseYMD(dateStr: string): Date {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -40,6 +127,19 @@ function subDays(date: Date, days: number): Date {
 export function HistoryPage({ data }: { data: PublicState }) {
   const [service, setService] = useState("all");
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [expandedRanges, setExpandedRanges] = useState<Set<string>>(() => new Set());
+
+  const toggleRange = (key: string) => {
+    setExpandedRanges((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   const today = useMemo(() => parseYMD(beijingDate(data.generatedAt)), [data.generatedAt]);
 
@@ -182,9 +282,7 @@ export function HistoryPage({ data }: { data: PublicState }) {
   };
 
   return (
-    <>
-      <StatusHeader />
-      <div className="status-shell">
+    <div className="status-shell">
         <main>
           <div className="archive-toolbar">
             <div className="archive-period">
@@ -312,62 +410,135 @@ export function HistoryPage({ data }: { data: PublicState }) {
             </div>
           </div>
           {months.size ? (
-            [...months].map(([month, days]) => (
-              <section className="archive-month" key={month}>
-                <h2>
-                  {new Date(`${month}-01T12:00:00Z`).toLocaleDateString("zh-CN", {
-                    year: "numeric",
-                    month: "long",
-                    timeZone: "UTC",
-                  })}
-                </h2>
-                {[...days].map(([date, items]) => (
-                  <div className="archive-day" key={date}>
-                    <div className="archive-date">
-                      <strong>{date.slice(8)}</strong>
-                      <span>
-                        {new Date(`${date}T12:00:00Z`).toLocaleDateString("zh-CN", {
-                          weekday: "short",
-                          timeZone: "UTC",
-                        })}
-                      </span>
-                    </div>
-                    <div className="archive-events">
-                      {items.length > 0 ? (
-                        items.map((item) => {
-                          const eventColor = resolveIncidentColor(item);
-                          return (
-                            <Link
-                              key={item.id}
-                              href={`/incidents/${item.id}`}
-                              className={`archive-event archive-${eventColor}`}
+            [...months].map(([month, days]) => {
+              const entries = groupMonthDays(days);
+              return (
+                <section className="archive-month" key={month}>
+                  <h2>
+                    {new Date(`${month}-01T12:00:00Z`).toLocaleDateString("zh-CN", {
+                      year: "numeric",
+                      month: "long",
+                      timeZone: "UTC",
+                    })}
+                  </h2>
+                  {entries.map((entry) => {
+                    if (entry.type === "range") {
+                      const isExpanded = expandedRanges.has(entry.key);
+                      return (
+                        <div className="archive-day archive-day-range" key={entry.key}>
+                          <div className="archive-date">
+                            <strong>
+                              {entry.startDayNum} - {entry.endDayNum}
+                            </strong>
+                            <span>{entry.daysCount}天</span>
+                          </div>
+                          <div className="archive-events">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => toggleRange(entry.key)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  toggleRange(entry.key);
+                                }
+                              }}
+                              className="archive-event archive-operational archive-collapsed-trigger cursor-pointer select-none group/range hover:bg-muted/40 transition-colors rounded-sm"
+                              aria-expanded={isExpanded}
+                              aria-label={`${entry.startDayNum}至${entry.endDayNum}日共${entry.daysCount}天无事态，点击${isExpanded ? "收起" : "展开"}`}
                             >
-                            <div className="archive-event-heading">
-                              <h3>{item.title}</h3>
-                              <time dateTime={item.publishedAt ?? item.updatedAt}>
-                                {new Date(item.publishedAt ?? item.updatedAt).toLocaleTimeString("zh-CN", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  hour12: false,
-                                  timeZone: "Asia/Shanghai",
-                                })}
-                              </time>
+                              <div className="archive-event-heading">
+                                <span className="archive-operational-text font-normal text-muted-foreground group-hover/range:text-foreground transition-colors">
+                                  无事态
+                                </span>
+                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground group-hover/range:text-foreground transition-colors">
+                                  <span>{isExpanded ? "收起" : "展开"}</span>
+                                  <ChevronDown
+                                    className={cn(
+                                      "size-3.5 transition-transform duration-200",
+                                      isExpanded && "rotate-180"
+                                    )}
+                                  />
+                                </span>
+                              </div>
                             </div>
-                          </Link>
-                        );
-                      })
-                      ) : (
-                        <div className="archive-event archive-operational">
-                          <div className="archive-event-heading">
-                            <span className="archive-operational-text">无事态</span>
+                            {isExpanded && (
+                              <div className="archive-expanded-list">
+                                {entry.days.map((day) => (
+                                  <div key={day.date} className="archive-expanded-item">
+                                    <div className="archive-expanded-date">
+                                      <strong>{day.dayNum}</strong>
+                                      <span>{day.weekday}</span>
+                                    </div>
+                                    <span className="archive-expanded-status">无事态</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </section>
-            ))
+                      );
+                    }
+
+                    return (
+                      <div className="archive-day" key={entry.date}>
+                        <div className="archive-date">
+                          <strong>{entry.dayNum}</strong>
+                          <span>{entry.weekday}</span>
+                        </div>
+                        <div className="archive-events">
+                          {entry.items.length > 0 ? (
+                            entry.items.map((item) => {
+                              const eventColor = resolveIncidentColor(item);
+                              return (
+                                <Link
+                                  key={item.id}
+                                  href={`/incidents/${item.id}`}
+                                  className={`archive-event archive-${eventColor}`}
+                                >
+                                  <div className="archive-event-heading">
+                                    <h3>{item.title}</h3>
+                                    <div className="archive-event-time">
+                                      {item.resolved ? (
+                                        <span title="已恢复" className="inline-flex items-center">
+                                          <CheckCircle2
+                                            className="archive-resolved-icon"
+                                            aria-hidden="true"
+                                          />
+                                        </span>
+                                      ) : (
+                                        <span className="archive-resolved-spacer" aria-hidden="true" />
+                                      )}
+                                      <time dateTime={item.publishedAt ?? item.updatedAt}>
+                                        {new Date(item.publishedAt ?? item.updatedAt).toLocaleTimeString(
+                                          "zh-CN",
+                                          {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                            hour12: false,
+                                            timeZone: "Asia/Shanghai",
+                                          }
+                                        )}
+                                      </time>
+                                    </div>
+                                  </div>
+                                </Link>
+                              );
+                            })
+                          ) : (
+                            <div className="archive-event archive-operational">
+                              <div className="archive-event-heading">
+                                <span className="archive-operational-text">无事态</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </section>
+              );
+            })
           ) : (
             <Empty>
               <EmptyHeader>
@@ -380,8 +551,6 @@ export function HistoryPage({ data }: { data: PublicState }) {
             </Empty>
           )}
         </main>
-        <StatusFooter />
       </div>
-    </>
   );
 }

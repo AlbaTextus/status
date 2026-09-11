@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useMemo, useState, type ElementType, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ElementType, type ReactNode } from "react"
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion"
 import type { LucideIcon } from "lucide-react"
 import { BrandWordmark } from "./brand-wordmark"
@@ -13,7 +13,6 @@ export function SiteHeader({ items, activeHref, navigationLabel, routeKey, brand
   items: NavigationItem[]; activeHref?: string; navigationLabel: string; routeKey: string;
   brandHref?: string; LinkComponent?: ElementType; BrandLinkComponent?: ElementType; actions: ReactNode
 }) {
-  const navigationId = useId()
   const reducedMotion = Boolean(useReducedMotion())
   const [collapsed, setCollapsed] = useState(false)
   const [caption, setCaption] = useState<{ href: string } | null>(null)
@@ -49,7 +48,7 @@ export function SiteHeader({ items, activeHref, navigationLabel, routeKey, brand
   return <header className="center-header" data-collapsed={collapsed}>
     <div className="center-header-inner">
       <BrandWordmark href={brandHref} collapsed={collapsed} LinkComponent={BrandLinkComponent} />
-      <LayoutGroup id={navigationId}>
+      <LayoutGroup id="status-site-header-navigation">
         <nav aria-label={navigationLabel} className="center-nav">
           {items.map(item => {
             const active = item.href === activeHref

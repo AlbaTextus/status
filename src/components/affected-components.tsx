@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Clock, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { HealthLabel } from "./health-label";
 import { statusLabels, type Incident, type PublicService, type HealthStatus, type UpdateStatusKind } from "@/lib/types";
@@ -122,8 +122,6 @@ export function AffectedComponents({ incident, service, allServices = [] }: Affe
     windowStart = incidentStart - paddingDuration;
     windowEnd = incidentEnd + paddingDuration;
   }
-
-  const totalWindow = windowEnd - windowStart;
 
   // Determine phases during the outage period (incidentStart to incidentEnd)
   interface OutagePhase {

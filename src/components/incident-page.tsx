@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
-import { StatusFooter, StatusHeader } from "./status-chrome";
 import { Badge } from "./ui/badge";
 import { AffectedComponents } from "./affected-components";
-import type { Incident, IncidentUpdate, PublicService, UpdateStatusKind } from "@/lib/types";
+import type { Incident, PublicService } from "@/lib/types";
 
 interface IncidentPageProps {
   incident: Incident;
@@ -76,14 +75,12 @@ export function IncidentPage({ incident, service, allServices = [] }: IncidentPa
   const isMaintenance = incidentColor === "yellow" || incident.title.includes("维护");
 
   return (
-    <>
-      <StatusHeader />
-      <div className="status-shell">
+    <div className="status-shell">
         <main>
           <div className="incident-nav-bar">
-            <Link href="/incidents" className="back-link">
+            <Link href="/history" className="back-link">
               <ChevronLeft className="size-4" />
-              返回事件列表
+              返回历史记录
             </Link>
           </div>
 
@@ -121,8 +118,6 @@ export function IncidentPage({ incident, service, allServices = [] }: IncidentPa
           {/* Updates Card */}
           <UpdatesTimeline incident={incident} />
         </main>
-        <StatusFooter />
       </div>
-    </>
   );
 }

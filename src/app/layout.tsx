@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { ThemeProvider } from "@/components/theme-provider";
+import { RefreshProvider, StatusHeader, SiteFooter } from "@/components/status-chrome";
 import "./globals.css";
 
 const inter = localFont({ src: "./fonts/inter.ttf", variable: "--font-inter", display: "swap" });
@@ -17,7 +18,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen flex flex-col"><ThemeProvider>{children}</ThemeProvider></body>
+      <body className="min-h-screen flex flex-col">
+        <ThemeProvider>
+          <RefreshProvider>
+            <StatusHeader />
+            <div className="status-page-content flex flex-col">{children}</div>
+            <SiteFooter />
+          </RefreshProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }
