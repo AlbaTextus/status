@@ -30,9 +30,10 @@ export function ServiceHistory({ services, now }: { services: PublicService[]; n
         <div className="history-bars" aria-label="过去 24 小时，共 90 格，每格代表 16 分钟的检测状态">
           {slots.map(slot => {
             const bucket = buckets.get(slot);
-            const status = timelineStatus(bucket);
-            const label = `${slotLabel(slot)} · ${bucket ? statusLabels[status] : "无检测记录"}`;
-            return <Tooltip key={slot}><TooltipTrigger render={<button type="button" className={cn("history-bar", `history-${status}`)} aria-label={label} />} /><TooltipContent><div><p>{label}</p>{bucket && <p>正常 {bucket.operational} 次 · 维护 {bucket.maintenance} 次 · 异常 {bucket.error} 次</p>}</div></TooltipContent></Tooltip>;
+            const current = slot === end;
+            const status = current ? service.result.status : timelineStatus(bucket);
+            const label = `${slotLabel(slot)} · ${current ? `当前：${statusLabels[status]}` : bucket ? statusLabels[status] : "无检测记录"}`;
+            return <Tooltip key={slot}><TooltipTrigger render={<button type="button" className={cn("history-bar", `history-${status}`, current && "history-bar-current")} aria-label={label} />} /><TooltipContent>{label}</TooltipContent></Tooltip>;
           })}
         </div>
       </section>;

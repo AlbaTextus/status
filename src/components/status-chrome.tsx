@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Activity, History, RefreshCw, Settings2 } from "lucide-react";
+import { Activity, History, RefreshCw } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -122,7 +122,6 @@ export function StatusHeader({ admin = false, onRefresh, refreshing = false }: {
       items={[
         { href: "/", title: "服务状态", icon: Activity },
         { href: "/history", title: "历史记录", icon: History },
-        { href: "/admin", title: "后台管理", icon: Settings2 },
       ]}
       activeHref={activeHref}
       navigationLabel="状态服务导航"

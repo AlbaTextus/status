@@ -162,7 +162,15 @@
 .history-uptime[data-level="yellow"] { color: var(--warning); }
 .history-uptime[data-level="red"] { color: var(--outage); }
 .history-bars { display: grid; grid-template-columns: repeat(90, minmax(0, 1fr)); gap: 2px; }
-.history-bar { display: block; width: 100%; height: 23px; padding: 0; border: 0; border-radius: 1px; transition: opacity .15s; }
+.history-bar { display: block; width: 100%; height: 23px; padding: 0; border: 0; border-radius: 1px; transition: background-color .3s ease, opacity .15s, transform .2s ease; }
+.history-bar:hover, .history-bar:focus-visible { transform: scaleY(1.15); }
+.history-bar-current { animation: history-live 2.4s ease-in-out infinite; transform-origin: center; }
+@keyframes history-live { 0%, 100% { opacity: 1; } 50% { opacity: .65; } }
+@media (prefers-reduced-motion: reduce) {
+  .history-bar { transition: none; }
+  .history-bar-current { animation: none; }
+  .history-bar:hover, .history-bar:focus-visible { transform: none; }
+}
 .history-bar:hover, .history-bar:focus-visible { opacity: .65; }
 .history-operational { background: var(--success); }
 .history-maintenance { background: var(--warning); }
