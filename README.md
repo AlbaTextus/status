@@ -97,6 +97,26 @@ STATUS_ADMIN_TOKEN=替换为自己的长随机管理密钥
 
 后台支持通用 OAuth2 登录，也兼容管理密钥。密钥仅在验证成功后保存在当前浏览器会话中；OAuth2 使用 HttpOnly Cookie 和 D1 服务端会话。两种方式都未配置时管理接口拒绝访问，包括本地环境。公开状态接口不会返回检测 URL 或草稿。
 
+### 接入 ALBATEXTUS Connect
+
+本地 Connect 默认从 `http://localhost:3000` 提供账户页面及 OAuth2 接口。相邻 `connect` 仓库已配置数据库并有启用的管理员时，可以直接登记 Status：
+
+```powershell
+cd ../connect
+go run ./cmd/register-status
+cd ../status
+npm run db:migrate:local
+npm run dev -- --hostname 127.0.0.1 --port 3100
+```
+
+打开 `http://127.0.0.1:3100/admin`，点击「使用 ALBATEXTUS Connect 登录」，在账户中心登录并确认授权后回到后台。
+
+登记工具创建独立机密客户端 `albatextus-status`，最低访问角色为 `ADMIN`，只申请 `profile`，回调为 `http://127.0.0.1:3100/api/auth/callback`。默认应用所有者和允许账号使用 Connect `.env` 中 `SEED_ADMIN_EMAIL` 对应的现有管理员；首次登记可用 `-admin-id <用户 UUID>` 指定。工具会保留已有的 Status 管理密钥及允许名单，重复执行复用客户端密钥并保留已登记的其他回调，不重置用户或其他应用。
+
+端口变化时使用 `go run ./cmd/register-status -app-url http://127.0.0.1:新的端口`。可用 `-issuer-url` 指定 Connect 的公开入口、`-output` 指定配置文件。配置写入本地 `.dev.vars`，运行中的 Status 需要重启以加载。凭据文件不提交到 Git。
+
+Connect 对应 `/oauth/authorize`、`/oauth/token` 和 `/api/v1/user`，使用 `client_secret_post` 发送客户端凭据，以 `sub`（用户 UUID）匹配允许名单，并显示 `display_name`。Connect 不提供 OIDC ID Token，无需申请 `openid` 或邮箱权限。线上需在 Connect 登记真实 HTTPS 回调，再将对应参数和 Client Secret 配置到 Worker，并执行数据库迁移。
+
 ### 通用 OAuth2 登录
 
 在登录源创建支持 **Authorization Code + PKCE S256** 的 OAuth2 应用，登记回调地址：

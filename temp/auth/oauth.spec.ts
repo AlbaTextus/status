@@ -215,6 +215,16 @@ test("supports nested numeric user IDs and client_secret_post", async () => {
   await expect(getAdminSession(adminRequest(cookie), env)).resolves.toEqual({ id: "42", name: "nested-admin" });
 });
 
+test("Connect profile claims retain the administrator UUID and display name", async () => {
+  const id = "b3d1db2c-8b91-4ad7-8e67-ea15af670890";
+  const env = settings({ STATUS_OAUTH_NAME: "ALBATEXTUS Connect", STATUS_OAUTH_ALLOWED_USER_IDS: id, STATUS_OAUTH_TOKEN_AUTH_METHOD: "client_secret_post" });
+  const { cookie } = await signIn(env, {
+    authMethod: "client_secret_post",
+    profile: { id, sub: id, display_name: "Connect 管理员", role: "SUPER_ADMIN", avatar_url: "" },
+  });
+  await expect(getAdminSession(adminRequest(cookie), env)).resolves.toEqual({ id, name: "Connect 管理员" });
+});
+
 test("missing or malformed browser binding and state never reach the token endpoint", async () => {
   const flow = await start();
   const valid = callbackRequest(flow);

@@ -227,7 +227,7 @@ function userFromProfile(profile: unknown, config: OAuthConfig): AdminUser {
   if (!id || id.length > 256) throw new AuthError(authErrorMessages.provider, 502);
   if (!config.allowedUserIds.has(id)) throw new AuthError(authErrorMessages.forbidden, 403, "forbidden");
   const parent = config.userIdClaim.split(".").slice(0, -1);
-  const name = ["name", "preferred_username", "username", "login"]
+  const name = ["name", "display_name", "preferred_username", "username", "login"]
     .map(key => claim(profile, [...parent, key].join(".")))
     .find(value => typeof value === "string" && value.trim());
   return { id, name: typeof name === "string" ? name.trim().slice(0, 120) : id };
