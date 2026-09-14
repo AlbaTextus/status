@@ -1,9 +1,10 @@
 import { AdminError, adminAction, authorize } from "@/lib/admin";
+import { AuthError } from "@/lib/auth";
 import { readStore } from "@/lib/store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const reply = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
-function fail(error: unknown) { if (error instanceof AdminError) return reply({ error: error.message }, error.status); console.error("Admin request failed", error); return reply({error:"操作失败，请检查服务端日志和 D1 数据库配置"},500); }
+function fail(error: unknown) { if (error instanceof AdminError || error instanceof AuthError) return reply({ error: error.message }, error.status); console.error("Admin request failed", error); return reply({error:"操作失败，请检查服务端日志和 D1 数据库配置"},500); }
 export async function GET(request: Request) { try { await authorize(request); return reply(await readStore()); } catch(error) { return fail(error); } }
 export async function POST(request: Request) {
   try {

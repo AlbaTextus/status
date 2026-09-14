@@ -1,1 +1,18 @@
 STATUS_ADMIN_TOKEN=replace-with-a-long-random-admin-token
+
+# 通用 OAuth2：取消下面必填项的注释，并填写登录源的配置。
+# 仅使用 OAuth2 时可以删除 STATUS_ADMIN_TOKEN。
+# STATUS_OAUTH_NAME=统一账号
+# STATUS_OAUTH_CLIENT_ID=your-client-id
+# STATUS_OAUTH_CLIENT_SECRET=your-client-secret
+# STATUS_OAUTH_AUTHORIZATION_URL=https://identity.example.com/oauth/authorize
+# STATUS_OAUTH_TOKEN_URL=https://identity.example.com/oauth/token
+# STATUS_OAUTH_USERINFO_URL=https://identity.example.com/userinfo
+# STATUS_OAUTH_REDIRECT_URI=http://127.0.0.1:3100/api/auth/callback
+# STATUS_OAUTH_ALLOWED_USER_IDS=your-stable-user-id
+
+# 可选：按登录源要求调整，默认使用 Basic 客户端认证、profile 权限和 sub 用户字段。
+# STATUS_OAUTH_TOKEN_AUTH_METHOD=client_secret_basic
+# STATUS_OAUTH_SCOPES=profile
+# STATUS_OAUTH_USER_ID_CLAIM=sub
+# STATUS_OAUTH_ISSUER=https://identity.example.com

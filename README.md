@@ -95,7 +95,54 @@ curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*"
 STATUS_ADMIN_TOKEN=替换为自己的长随机管理密钥
 ```
 
-后台需填写密钥，保存在当前浏览器会话中。未配置密钥时管理接口拒绝访问，包括本地环境。公开状态接口不会返回检测 URL 或草稿。
+后台支持通用 OAuth2 登录，也兼容管理密钥。密钥仅在验证成功后保存在当前浏览器会话中；OAuth2 使用 HttpOnly Cookie 和 D1 服务端会话。两种方式都未配置时管理接口拒绝访问，包括本地环境。公开状态接口不会返回检测 URL 或草稿。
+
+### 通用 OAuth2 登录
+
+在登录源创建支持 **Authorization Code + PKCE S256** 的 OAuth2 应用，登记回调地址：
+
+```text
+https://你的状态页域名/api/auth/callback
+```
+
+本地开发可登记 `http://127.0.0.1:3100/api/auth/callback`。浏览器访问地址与配置的回调地址必须使用相同的协议、主机名和端口；`localhost` 与 `127.0.0.1` 不能混用。除回环地址外，所有端点和回调必须使用 HTTPS。
+
+复制 `.dev.vars.example` 中的 OAuth2 配置到 `.dev.vars` 并填写真实值。线上通过 Worker 的环境变量和 Secrets 配置：
+
+| 变量 | 用途 |
+| --- | --- |
+| `STATUS_OAUTH_CLIENT_ID` | 必填，OAuth2 应用 ID |
+| `STATUS_OAUTH_CLIENT_SECRET` | 必填，OAuth2 应用密钥；线上使用 Wrangler Secret |
+| `STATUS_OAUTH_AUTHORIZATION_URL` | 必填，授权端点 |
+| `STATUS_OAUTH_TOKEN_URL` | 必填，换取访问令牌的端点 |
+| `STATUS_OAUTH_USERINFO_URL` | 必填，使用 Bearer 访问令牌获取用户资料的 JSON 端点 |
+| `STATUS_OAUTH_REDIRECT_URI` | 必填，完整回调地址，路径固定为 `/api/auth/callback` |
+| `STATUS_OAUTH_ALLOWED_USER_IDS` | 必填，允许管理后台的固定用户 ID，以逗号分隔；不支持 `*` |
+| `STATUS_OAUTH_NAME` | 可选，登录按钮显示名称，默认 `OAuth2` |
+| `STATUS_OAUTH_SCOPES` | 可选，空格分隔的权限范围，默认 `profile`；空字符串表示不发送 scope |
+| `STATUS_OAUTH_USER_ID_CLAIM` | 可选，用户资料中的固定 ID 字段，默认 `sub`；支持 `id`、`data.id` 等路径 |
+| `STATUS_OAUTH_TOKEN_AUTH_METHOD` | 可选，`client_secret_basic`（默认）或 `client_secret_post` |
+| `STATUS_OAUTH_ISSUER` | 可选，登录源的 issuer，默认授权端点的 origin；登录源返回 `iss` 或 ID Token 时必须与其完全一致 |
+
+例如用户资料为 `{"id":42,"username":"admin"}`，设置 `STATUS_OAUTH_USER_ID_CLAIM=id` 和 `STATUS_OAUTH_ALLOWED_USER_IDS=42`。允许名单使用登录源分配的不可变 ID，不使用可自行修改的显示名或邮箱。数字 ID 必须是安全整数，较大的 ID 请让登录源以字符串返回。
+
+先执行新迁移，再部署：
+
+```sh
+# 本地
+npm run db:migrate:local
+
+# 线上：其他 OAuth2 环境变量也需要先在 Worker 中配置好
+npm run db:migrate:remote
+npx wrangler secret put STATUS_OAUTH_CLIENT_SECRET
+npm run cf:deploy
+```
+
+也可以将非密钥配置写入 `wrangler.jsonc` 的 `vars`，不要把 Client Secret 写进该文件。若只需 OAuth2，移除 `STATUS_ADMIN_TOKEN` 即可隐藏密钥入口；保留它则两种登录方式同时有效，脚本仍可通过 `x-admin-token` 调用管理接口。
+
+登录通过 `oauth4webapi` 处理协议，授权请求绑定浏览器、使用一次性 state 与 PKCE，10 分钟后失效。用户通过允许名单校验后建立 8 小时会话；浏览器仅保存随机会话 Cookie，D1 仅保存其哈希，不保存 OAuth2 访问令牌或刷新令牌。生产 Cookie 使用 `Secure`、`HttpOnly`、`SameSite=Lax` 和 `__Host-` 前缀。退出登录立即删除服务端会话；移除允许名单中的 ID 后，该账号下次后台请求会被拒绝。修改登录源、客户端凭据或 ID 字段会使旧会话失效。
+
+OAuth2 会话下的写操作必须携带与站点一致的 `Origin`，回调成功或失败都会清除流程 Cookie，并跳转回 `/admin`。取消授权、请求过期和权限不足会显示对应提示。登录源需支持标准 JSON 令牌响应及 Bearer 用户资料请求；自定义非标准协议需另行适配。
 
 ## 从旧 JSON 导入
 
@@ -119,10 +166,13 @@ npx wrangler d1 export DB --remote --output ../release/status-backup.sql
 ```powershell
 npm run lint
 npm run typecheck
+npm run test:auth
 npm run cf:build
 npm run cf:check
 ```
 
 `cf:check` 仅预检，不上传，打包结果写入工作区 `release/status/worker/`。`.next/` 和 `.open-next/` 是框架生成的构建中间目录，不提交到仓库。OpenNext 对原生 Windows 的支持有限，生产构建推荐 Linux CI 或 WSL。
+
+`test:auth` 运行 `temp/auth/` 中的 OAuth2 回归测试，启动本地模拟登录源和独立、不持久化的真实 D1 绑定，覆盖 PKCE、两种客户端认证方式、允许名单、回调重放、跨站请求和退出撤销。无需真实 OAuth2 密钥、Cloudflare 登录或浏览器安装；测试配置与结果写入 `temp/output/`，不使用项目的 `.dev.vars` 或现有数据库。
 
 `E:\AlbaTextus\temps\status\test-cloudflare.mjs` 是 Workers 集成验证脚本，使用独立的 `temps/status/cf-tests/` 本地数据库与测试端口，不修改正式服务列表。旧 `test-management.cjs` 面向已移除的 Node 文件存储，不再适用于当前运行方式。

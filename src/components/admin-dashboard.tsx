@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { motion, MotionConfig } from "framer-motion";
 import { ArrowUpRight, CheckCircle2, ChevronLeft, ChevronRight, FileText, LoaderCircle, Pencil, Plus, RefreshCw, RotateCcw, Server, Trash2 } from "lucide-react";
 import { AutoPublishSettings, AutoPublishRuleFields } from "./auto-publish-settings";
+import { AdminAccess, type AdminIdentity } from "./admin-access";
 import { DisplayTime, HealthLabel } from "./health-label";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -60,11 +61,19 @@ function getPaginationItems(currentPage: number, totalPages: number): (number | 
   return items;
 }
 
-export function AdminDashboard(){
+export function AdminDashboard() {
+  return <AdminAccess>{(identity, onUnauthorized, sessionPanel) =>
+    <AuthenticatedDashboard identity={identity} onUnauthorized={onUnauthorized} sessionPanel={sessionPanel} />
+  }</AdminAccess>;
+}
+
+function AuthenticatedDashboard({ identity, onUnauthorized, sessionPanel }: {
+  identity: AdminIdentity;
+  onUnauthorized: () => void;
+  sessionPanel: ReactNode;
+}) {
   const [data,setData]=useState<Store|null>(null);
-  const [token,setToken]=useState("");
-  const [tokenInput,setTokenInput]=useState("");
-  const [locked,setLocked]=useState(false);
+  const token = identity.token;
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [busy,setBusy]=useState(false);
@@ -86,21 +95,19 @@ export function AdminDashboard(){
   const paginatedIncidents = incidents.slice((safeIncidentPage - 1) * INCIDENTS_PER_PAGE, safeIncidentPage * INCIDENTS_PER_PAGE);
 
 
-  async function load(secret = token) {
+  async function load() {
     try {
       const response = await fetch("/api/admin", {
-        headers: { "x-admin-token": secret },
+        headers: token ? { "x-admin-token": token } : undefined,
         cache: "no-store",
       });
       const value = await response.json();
       if (!response.ok) {
-        if (response.status === 401) setLocked(true);
+        if (response.status === 401) { onUnauthorized(); return; }
         throw new Error(value.error);
       }
       setData(value);
-      setLocked(false);
       setError("");
-      setToken(secret);
     } catch (e) {
       setError(e instanceof Error ? e.message : "无法加载后台");
     }
@@ -109,15 +116,8 @@ export function AdminDashboard(){
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
-    const secret = sessionStorage.getItem("status-admin-token") ?? "";
-    if (!secret) {
-      Promise.resolve().then(() => {
-        if (active) setLocked(true);
-      });
-      return;
-    }
     fetch("/api/admin", {
-      headers: { "x-admin-token": secret },
+      headers: token ? { "x-admin-token": token } : undefined,
       cache: "no-store",
       signal: controller.signal,
     })
@@ -125,13 +125,11 @@ export function AdminDashboard(){
         const value = await response.json();
         if (!active) return;
         if (response.status === 401) {
-          setLocked(true);
+          onUnauthorized();
           return;
         }
         if (!response.ok) throw new Error(value.error);
-        setToken(secret);
         setData(value);
-        setLocked(false);
       })
       .catch(e => {
         if (active && e.name !== "AbortError") {
@@ -142,14 +140,14 @@ export function AdminDashboard(){
       active = false;
       controller.abort();
     };
-  }, []);
+  }, [token, onUnauthorized]);
   const ready = data !== null;
   useEffect(()=>{
-    if(!ready||busy||locked)return;
+    if(!ready||busy)return;
     let active=true;const controller=new AbortController();
-    const timer=setInterval(async()=>{try{const response=await fetch("/api/admin",{headers:{"x-admin-token":token},cache:"no-store",signal:controller.signal});const value=await response.json();if(!active)return;if(response.status===401)setLocked(true);if(!response.ok)throw new Error(value.error);setData(value);}catch(e){if(active)setError(e instanceof Error?e.message:"状态刷新失败");}},10000);
+    const timer=setInterval(async()=>{try{const response=await fetch("/api/admin",{headers:token?{"x-admin-token":token}:undefined,cache:"no-store",signal:controller.signal});const value=await response.json();if(!active)return;if(response.status===401){onUnauthorized();return;}if(!response.ok)throw new Error(value.error);setData(value);}catch(e){if(active)setError(e instanceof Error?e.message:"状态刷新失败");}},10000);
     return()=>{active=false;controller.abort();clearInterval(timer);};
-  },[ready,busy,locked,token]);
+  },[ready,busy,token,onUnauthorized]);
 
   async function act(body:Record<string,unknown>,success:string){
     setBusy(true);setFormError("");setError("");setNotice("");
@@ -157,6 +155,7 @@ export function AdminDashboard(){
     try{
       const response=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json","x-admin-token":token},body:JSON.stringify(body)});
       const value=await response.json();
+      if(response.status===401){onUnauthorized();return false;}
       if(!response.ok)throw new Error(value.error);
       await minDelay;
       setData(value);
@@ -278,11 +277,11 @@ export function AdminDashboard(){
   const currentNow = nowMs;
 
   return <MotionConfig reducedMotion="user"><div className="status-shell admin-shell"><main>
+    {sessionPanel}
     {error&&<Alert variant="destructive" className="mb-5"><AlertTitle>操作未完成</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
     {notice&&<p className="save-notice" role="status">{notice}</p>}
-    {locked&&<section className="system-panel access-panel"><h2>管理验证</h2><form onSubmit={async event=>{event.preventDefault();sessionStorage.setItem("status-admin-token",tokenInput);await load(tokenInput);}}><FieldGroup><Field><FieldLabel htmlFor="admin-token">管理密钥</FieldLabel><Input id="admin-token" type="password" value={tokenInput} onChange={e=>setTokenInput(e.target.value)} required autoComplete="current-password"/><FieldDescription>填写服务器配置的 STATUS_ADMIN_TOKEN。</FieldDescription></Field><Button type="submit">进入后台</Button></FieldGroup></form></section>}
-    {!data&&!locked&&!error&&<p className="loading-state"><LoaderCircle className="size-4 animate-spin"/>正在加载…</p>}
-    {!data&&!locked&&error&&<Button variant="outline" onClick={()=>load()}>重试</Button>}
+    {!data&&!error&&<p className="loading-state"><LoaderCircle className="size-4 animate-spin"/>正在加载…</p>}
+    {!data&&error&&<Button variant="outline" onClick={()=>load()}>重试</Button>}
     {data&&(
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
       <section className="system-panel admin-section"><div className="admin-section-heading"><div><h2>服务管理 <span>{data.services.length}</span></h2><p>每项服务独立检测，不划分子组件。</p></div><div className="flex gap-2"><Button variant="outline" disabled={busy||!data.services.length} onClick={()=>act({action:"check"},"已完成全部服务检测")}><RefreshCw data-icon="inline-start" className={busy?"animate-spin":undefined}/>全部检测</Button><Button disabled={busy} onClick={()=>editService()}><Plus data-icon="inline-start"/>添加服务</Button></div></div><Separator/>

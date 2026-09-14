@@ -1,23 +1,13 @@
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mutateStore } from "./store";
 import { checkServices } from "./monitor";
 import { unchecked, type IncidentUpdate, defaultAutoPublishRules, type AutoPublishRules } from "./types";
 import { getStatusEnv } from "./cloudflare";
+import { authorizeAdmin } from "./auth";
 
 export class AdminError extends Error { constructor(message: string, public status = 400) { super(message); } }
 export async function authorize(request: Request) {
-  const origin = request.headers.get("origin");
-  const host = request.headers.get("host");
-  if (origin && new URL(origin).host !== host) throw new AdminError("不允许跨站管理请求", 403);
-  if (request.headers.get("sec-fetch-site") === "cross-site") throw new AdminError("不允许跨站管理请求", 403);
-  const configured = (await getStatusEnv()).STATUS_ADMIN_TOKEN;
-  if (configured) {
-    const supplied = request.headers.get("x-admin-token") ?? "";
-    const digest = (value: string) => createHash("sha256").update(value).digest();
-    if (!timingSafeEqual(digest(configured), digest(supplied))) throw new AdminError("请输入管理密钥", 401);
-  } else {
-    throw new AdminError("请先配置 STATUS_ADMIN_TOKEN 管理密钥", 403);
-  }
+  await authorizeAdmin(request, await getStatusEnv());
 }
 const object = (value: unknown): Record<string, unknown> => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new AdminError("请求格式无效"); return value as Record<string, unknown>; };
 function text(value: unknown, name: string, max = 160) { if (typeof value !== "string" || !value.trim() || value.trim().length > max) throw new AdminError(`${name}不能为空，且最多 ${max} 个字符`); return value.trim(); }
