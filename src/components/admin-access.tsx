@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { LoaderCircle, LogIn, LogOut, ShieldCheck } from "lucide-react";
 import { authErrorMessages, type AdminUser, type AuthErrorCode, type AuthStatus } from "@/lib/auth-types";
+import { notifyAdminAuthChanged, readAdminAuthStatus as readStatus, savedAdminToken as savedToken } from "@/lib/auth-client";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
@@ -10,27 +11,6 @@ import { Input } from "./ui/input";
 import { Separator } from "./ui/separator";
 
 export type AdminIdentity = { token: string; user: AdminUser | null };
-
-function savedToken(value?: string): string {
-  try {
-    if (value === "") sessionStorage.removeItem("status-admin-token");
-    else if (value !== undefined) sessionStorage.setItem("status-admin-token", value);
-    return sessionStorage.getItem("status-admin-token") ?? "";
-  } catch {
-    return "";
-  }
-}
-
-async function readStatus(token: string, signal?: AbortSignal): Promise<AuthStatus> {
-  const response = await fetch("/api/auth/session", {
-    headers: token ? { "x-admin-token": token } : undefined,
-    cache: "no-store",
-    signal,
-  });
-  const value = await response.json();
-  if (!response.ok) throw new Error(value.error || "无法连接登录服务，请稍后重试。");
-  return value;
-}
 
 export function AdminAccess({ children }: {
   children: (identity: AdminIdentity, onUnauthorized: () => void, sessionPanel: ReactNode) => ReactNode;
@@ -78,6 +58,7 @@ export function AdminAccess({ children }: {
     setIdentity(null);
     setTokenInput("");
     setError("登录已失效，请重新验证身份。");
+    notifyAdminAuthChanged();
   }, []);
 
   async function loginWithToken(event: FormEvent<HTMLFormElement>) {
@@ -95,6 +76,7 @@ export function AdminAccess({ children }: {
       savedToken(tokenInput);
       setIdentity({ token: tokenInput, user: null });
       setTokenInput("");
+      notifyAdminAuthChanged();
     } catch (error) {
       setError(error instanceof Error ? error.message : "登录失败，请重试。");
     } finally {
@@ -115,6 +97,7 @@ export function AdminAccess({ children }: {
       setIdentity(null);
       setTokenInput("");
       setTokenInvalid(false);
+      notifyAdminAuthChanged();
     } catch (error) {
       setError(error instanceof Error ? error.message : "退出失败，请重试。");
     } finally {

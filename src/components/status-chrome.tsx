@@ -1,13 +1,14 @@
 "use client";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Activity, History, RefreshCw } from "lucide-react";
+import { Activity, History, RefreshCw, Settings2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "./ui/button";
 
 import { cn } from "@/lib/utils";
+import { ADMIN_AUTH_CHANGED_EVENT, readAdminAuthStatus, savedAdminToken } from "@/lib/auth-client";
 
 type RefreshContextType = {
   onRefresh?: () => void | Promise<void>;
@@ -93,9 +94,39 @@ function HeaderRefreshButton({
 
 export function StatusHeader({ admin = false, onRefresh, refreshing = false }: { admin?: boolean; onRefresh?: () => void; refreshing?: boolean }) {
   const pathname = usePathname();
+  const [authenticated, setAuthenticated] = useState(false);
   const context = useHeaderRefresh();
   const activeRefresh = onRefresh ?? context.onRefresh;
   const activeRefreshing = refreshing || (context.refreshing ?? false);
+
+  useEffect(() => {
+    let controller: AbortController | undefined;
+    const refreshAuthentication = async () => {
+      controller?.abort();
+      const requestController = new AbortController();
+      controller = requestController;
+      try {
+        const status = await readAdminAuthStatus(savedAdminToken(), requestController.signal);
+        if (!requestController.signal.aborted) setAuthenticated(status.authenticated === true);
+      } catch {
+        if (!requestController.signal.aborted) setAuthenticated(false);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refreshAuthentication();
+    };
+
+    void refreshAuthentication();
+    window.addEventListener(ADMIN_AUTH_CHANGED_EVENT, refreshAuthentication);
+    window.addEventListener("focus", refreshAuthentication);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      controller?.abort();
+      window.removeEventListener(ADMIN_AUTH_CHANGED_EVENT, refreshAuthentication);
+      window.removeEventListener("focus", refreshAuthentication);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [pathname]);
 
   const activeHref = admin || pathname.startsWith("/admin")
     ? "/admin"
@@ -122,6 +153,7 @@ export function StatusHeader({ admin = false, onRefresh, refreshing = false }: {
       items={[
         { href: "/", title: "服务状态", icon: Activity },
         { href: "/history", title: "历史记录", icon: History },
+        ...(authenticated ? [{ href: "/admin", title: "后台管理", icon: Settings2 }] : []),
       ]}
       activeHref={activeHref}
       navigationLabel="状态服务导航"
