@@ -125,7 +125,7 @@ Connect 对应 `/oauth/authorize`、`/oauth/token` 和 `/api/v1/user`，使用 `
 https://你的状态页域名/api/auth/callback
 ```
 
-本地开发可登记 `http://127.0.0.1:3100/api/auth/callback`。浏览器访问地址与配置的回调地址必须使用相同的协议、主机名和端口；`localhost` 与 `127.0.0.1` 不能混用。除回环地址外，所有端点和回调必须使用 HTTPS。
+本地开发可登记 `http://127.0.0.1:3100/api/auth/callback`。从同协议、同端口的 `localhost`、`127.0.0.1` 或 `[::1]` 入口登录时，会先跳到登记的回调主机，再创建授权流程和 Cookie。回调始终使用登记地址；其他主机、端口或协议不匹配时会显示地址提示。除回环地址外，所有端点和回调必须使用 HTTPS。
 
 复制 `.dev.vars.example` 中的 OAuth2 配置到 `.dev.vars` 并填写真实值。线上通过 Worker 的环境变量和 Secrets 配置：
 

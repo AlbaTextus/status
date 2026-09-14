@@ -6,6 +6,7 @@ import { authErrorMessages, type AdminUser, type AuthErrorCode, type AuthStatus 
 const FLOW_TTL = 10 * 60;
 const SESSION_TTL = 8 * 60 * 60;
 const CALLBACK_PATH = "/api/auth/callback";
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const responseHeaders = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", Vary: "Cookie" };
 
@@ -51,7 +52,7 @@ function requestUrl(request: Request): URL {
 function endpoint(value: string): URL {
   let url: URL;
   try { url = new URL(value); } catch { throw configurationError(); }
-  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  const loopback = LOOPBACK_HOSTS.has(url.hostname);
   if ((url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) || url.username || url.password || url.hash) {
     throw configurationError();
   }
@@ -105,7 +106,9 @@ export function assertSameOrigin(request: Request, requireOrigin = false) {
 }
 
 function assertCallbackOrigin(request: Request, config: OAuthConfig) {
-  if (requestUrl(request).origin !== new URL(config.redirectUri).origin) throw configurationError();
+  if (requestUrl(request).origin !== new URL(config.redirectUri).origin) {
+    throw new AuthError(authErrorMessages.origin, 400, "origin");
+  }
 }
 
 function cookieName(request: Request, kind: "session" | "flow") {
@@ -182,9 +185,18 @@ async function sessionResponse(request: Request, env: StatusEnv) {
 }
 
 async function loginResponse(request: Request, env: StatusEnv) {
-  assertSameOrigin(request);
+  // Top-level GET navigation also covers the hop from a local hostname alias.
+  // The callback still requires the browser-bound, single-use state and PKCE.
+  const navigation = request.method === "GET" && request.headers.get("sec-fetch-mode") === "navigate" && request.headers.get("sec-fetch-dest") === "document";
+  if (!navigation) assertSameOrigin(request);
   const config = getOAuthConfig(env);
   if (!config) throw configurationError();
+  const currentUrl = requestUrl(request);
+  const callbackUrl = new URL(config.redirectUri);
+  if (currentUrl.origin !== callbackUrl.origin && currentUrl.protocol === callbackUrl.protocol && currentUrl.port === callbackUrl.port && LOOPBACK_HOSTS.has(currentUrl.hostname) && LOOPBACK_HOSTS.has(callbackUrl.hostname)) {
+    // Create no state or cookies until the browser reaches the callback's host.
+    return redirect(new URL("/api/auth/login", callbackUrl));
+  }
   assertCallbackOrigin(request, config);
   const state = oauth.generateRandomState();
   const browserToken = oauth.generateRandomState();

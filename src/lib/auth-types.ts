@@ -11,6 +11,7 @@ export type AuthStatus = {
 
 export const authErrorMessages = {
   configuration: "登录服务尚未完成配置，请联系管理员。",
+  origin: "登录地址与回调地址不一致，请从已配置的后台地址重新登录。",
   state: "登录请求已过期或无效，请重新登录。",
   denied: "你已取消授权，可以重新登录。",
   forbidden: "此账号没有后台管理权限，请联系管理员。",

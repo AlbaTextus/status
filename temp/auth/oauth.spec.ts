@@ -338,7 +338,7 @@ test("HTTPS uses secure host-only cookies and enforces the configured callback o
   for (const flag of ["Secure", "HttpOnly", "SameSite=Lax", "Path=/", "Max-Age=28800"]) expect(sessionCookie).toContain(flag);
   expect(sessionCookie).not.toContain("Domain=");
   const mismatch = await handleAuthRequest(new Request("https://other.example.com/api/auth/login"), env, "login");
-  expect(errorCode(mismatch)).toBe("configuration");
+  expect(errorCode(mismatch)).toBe("origin");
 });
 
 test("legacy API tokens work without OAuth2 and with incomplete OAuth2 configuration", async () => {
@@ -368,6 +368,68 @@ test("NextRequest loopback normalization preserves the browser origin throughout
   expect(logout.status).toBe(200);
   const invalid = await handleAuthRequest(new Request("http://localhost:3100/api/auth/login", { headers: { host: "attacker.example", Origin: "http://attacker.example" } }), env, "login");
   expect(errorCode(invalid)).toBe("provider");
+});
+
+test("loopback aliases redirect to the registered host before creating a login flow", async () => {
+  for (const [entryOrigin, callbackOrigin] of [
+    ["http://localhost:3100", "http://127.0.0.1:3100"],
+    ["http://127.0.0.1:3100", "http://localhost:3100"],
+    ["http://[::1]:3100", "http://127.0.0.1:3100"],
+    ["https://localhost:3100", "https://127.0.0.1:3100"],
+  ]) {
+    const env = settings({ STATUS_OAUTH_REDIRECT_URI: `${callbackOrigin}/api/auth/callback` });
+    const request = new Request(`${entryOrigin}/api/auth/login?return_to=https://attacker.example`);
+    const response = await handleAuthRequest(request, env, "login");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`${callbackOrigin}/api/auth/login`);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.has("set-cookie")).toBe(false);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM auth_flows").first("count")).toBe(0);
+  }
+});
+
+test("cross-site navigation after the canonical hop completes a browser-bound OAuth2 login", async () => {
+  const env = settings();
+  const hop = await handleAuthRequest(new Request("http://localhost:3100/api/auth/login"), env, "login");
+  const login = await handleAuthRequest(new Request(hop.headers.get("location")!, {
+    headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" },
+  }), env, "login");
+  const flow = { env, cookie: cookieFrom(login, "flow"), authorization: new URL(login.headers.get("location")!) };
+  const callback = callbackRequest(flow);
+  expect(errorCode(await handleAuthRequest(new Request(callback.url), env, "callback"))).toBe("state");
+  expect(tokenRequests).toBe(0);
+  const response = await handleAuthRequest(callback, env, "callback");
+  expect(response.headers.get("location")).toBe("http://127.0.0.1:3100/admin");
+  const cookie = cookieFrom(response, "session");
+  await expect(authorizeAdmin(adminRequest(cookie), env)).resolves.toBeUndefined();
+});
+
+test("canonical login rejects different ports, protocols, public hosts and cross-site fetches", async () => {
+  const env = settings();
+  for (const origin of ["http://localhost:3101", "https://localhost:3100", "http://attacker.example:3100"]) {
+    const response = await handleAuthRequest(new Request(`${origin}/api/auth/login`, {
+      headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" },
+    }), env, "login");
+    expect(errorCode(response)).toBe("origin");
+  }
+  for (const [mode, destination] of [["cors", "empty"], ["navigate", "iframe"]]) {
+    const response = await handleAuthRequest(new Request("http://127.0.0.1:3100/api/auth/login", {
+      headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": mode, "sec-fetch-dest": destination },
+    }), env, "login");
+    expect(errorCode(response)).toBe("provider");
+  }
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM auth_flows").first("count")).toBe(0);
+});
+
+test("the OAuth2 callback remains restricted to the exact registered origin", async () => {
+  const flow = await start();
+  const valid = callbackRequest(flow);
+  const alias = new URL(valid.url);
+  alias.hostname = "localhost";
+  const response = await handleAuthRequest(new Request(alias, { headers: { cookie: flow.cookie } }), flow.env, "callback");
+  expect(errorCode(response)).toBe("origin");
+  expect(tokenRequests).toBe(0);
+  expect(await flow.env.DB.prepare("SELECT COUNT(*) AS count FROM auth_sessions").first("count")).toBe(0);
 });
 
 test("invalid configuration and unsafe identity values fail closed", async () => {
