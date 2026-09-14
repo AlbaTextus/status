@@ -111,11 +111,13 @@ npm run dev -- --hostname 127.0.0.1 --port 3100
 
 打开 `http://127.0.0.1:3100/admin`，点击「使用 ALBATEXTUS Connect 登录」，在账户中心登录并确认授权后回到后台。
 
-登记工具创建独立机密客户端 `albatextus-status`，最低访问角色为 `ADMIN`，只申请 `profile`，回调为 `http://127.0.0.1:3100/api/auth/callback`。默认应用所有者和允许账号使用 Connect `.env` 中 `SEED_ADMIN_EMAIL` 对应的现有管理员；首次登记可用 `-admin-id <用户 UUID>` 指定。工具会保留已有的 Status 管理密钥及允许名单，重复执行复用客户端密钥并保留已登记的其他回调，不重置用户或其他应用。
+登记工具创建独立机密客户端 `albatextus-status`，最低访问角色为 `ADMIN`，只申请 `profile`，回调为 `http://127.0.0.1:3100/api/auth/callback`。默认应用所有者使用 Connect `.env` 中 `SEED_ADMIN_EMAIL` 对应的现有管理员；首次登记可用 `-admin-id <用户 UUID>` 指定。Status 默认允许 `ADMIN`、`SUPER_ADMIN` 角色，不限定为应用所有者；Connect 仍会检查应用的最低角色，已有的 `SUPER_ADMIN` 要求会保留。工具保留已有 Status 管理密钥和自定义允许名单，重复执行复用客户端密钥及已登记的其他回调，不重置用户或其他应用。
+
+旧版登记工具曾自动写入仅包含应用所有者 UUID 的名单。要切换到角色授权，在 Connect 运行 `go run ./cmd/register-status -migrate-owner-allowlist`，再执行 Status 数据库迁移并重启开发服务。这个选项只清理与所选所有者完全匹配的单账号名单，遇到自定义账号名单会拒绝迁移；默认登记会保留已有的账号限制。
 
 端口变化时使用 `go run ./cmd/register-status -app-url http://127.0.0.1:新的端口`。可用 `-issuer-url` 指定 Connect 的公开入口、`-output` 指定配置文件。配置写入本地 `.dev.vars`，运行中的 Status 需要重启以加载。凭据文件不提交到 Git。
 
-Connect 对应 `/oauth/authorize`、`/oauth/token` 和 `/api/v1/user`，使用 `client_secret_post` 发送客户端凭据，以 `sub`（用户 UUID）匹配允许名单，并显示 `display_name`。Connect 不提供 OIDC ID Token，无需申请 `openid` 或邮箱权限。线上需在 Connect 登记真实 HTTPS 回调，再将对应参数和 Client Secret 配置到 Worker，并执行数据库迁移。
+Connect 对应 `/oauth/authorize`、`/oauth/token` 和 `/api/v1/user`，使用 `client_secret_post` 发送客户端凭据，以 `sub`（用户 UUID）识别账号、校验服务端用户资料中的 `role`，并显示 `display_name`。Connect 不提供 OIDC ID Token，无需申请 `openid` 或邮箱权限。线上需在 Connect 登记真实 HTTPS 回调，再将对应参数和 Client Secret 配置到 Worker，并执行数据库迁移。
 
 ### 通用 OAuth2 登录
 
@@ -137,14 +139,18 @@ https://你的状态页域名/api/auth/callback
 | `STATUS_OAUTH_TOKEN_URL` | 必填，换取访问令牌的端点 |
 | `STATUS_OAUTH_USERINFO_URL` | 必填，使用 Bearer 访问令牌获取用户资料的 JSON 端点 |
 | `STATUS_OAUTH_REDIRECT_URI` | 必填，完整回调地址，路径固定为 `/api/auth/callback` |
-| `STATUS_OAUTH_ALLOWED_USER_IDS` | 必填，允许管理后台的固定用户 ID，以逗号分隔；不支持 `*` |
+| `STATUS_OAUTH_ALLOWED_USER_IDS` | 可选，允许管理后台的固定用户 ID，以逗号分隔；与角色名单至少设置一项，不支持 `*` |
+| `STATUS_OAUTH_ALLOWED_ROLES` | 可选，允许管理后台的角色，以逗号分隔，区分大小写；Connect 使用 `ADMIN,SUPER_ADMIN`，不支持 `*` |
 | `STATUS_OAUTH_NAME` | 可选，登录按钮显示名称，默认 `OAuth2` |
 | `STATUS_OAUTH_SCOPES` | 可选，空格分隔的权限范围，默认 `profile`；空字符串表示不发送 scope |
 | `STATUS_OAUTH_USER_ID_CLAIM` | 可选，用户资料中的固定 ID 字段，默认 `sub`；支持 `id`、`data.id` 等路径 |
+| `STATUS_OAUTH_ROLE_CLAIM` | 可选，服务端用户资料中的角色字段，默认 `role`；支持 `data.role` 等路径，值必须为字符串 |
 | `STATUS_OAUTH_TOKEN_AUTH_METHOD` | 可选，`client_secret_basic`（默认）或 `client_secret_post` |
 | `STATUS_OAUTH_ISSUER` | 可选，登录源的 issuer，默认授权端点的 origin；登录源返回 `iss` 或 ID Token 时必须与其完全一致 |
 
 例如用户资料为 `{"id":42,"username":"admin"}`，设置 `STATUS_OAUTH_USER_ID_CLAIM=id` 和 `STATUS_OAUTH_ALLOWED_USER_IDS=42`。允许名单使用登录源分配的不可变 ID，不使用可自行修改的显示名或邮箱。数字 ID 必须是安全整数，较大的 ID 请让登录源以字符串返回。
+
+若用户资料为 `{"sub":"用户 UUID","role":"SUPER_ADMIN"}`，可仅设置 `STATUS_OAUTH_ALLOWED_ROLES=ADMIN,SUPER_ADMIN`，让符合角色的不同账号登录。角色必须由登录源管理并通过服务端 Bearer 用户资料接口返回，不能使用用户可自行修改的资料字段。同时设置账号与角色名单时，账号必须满足两项限制；角色缺失或不匹配时拒绝登录。两种名单都未设置时 OAuth2 配置无效。
 
 先执行新迁移，再部署：
 
@@ -160,7 +166,7 @@ npm run cf:deploy
 
 也可以将非密钥配置写入 `wrangler.jsonc` 的 `vars`，不要把 Client Secret 写进该文件。若只需 OAuth2，移除 `STATUS_ADMIN_TOKEN` 即可隐藏密钥入口；保留它则两种登录方式同时有效，脚本仍可通过 `x-admin-token` 调用管理接口。
 
-登录通过 `oauth4webapi` 处理协议，授权请求绑定浏览器、使用一次性 state 与 PKCE，10 分钟后失效。用户通过允许名单校验后建立 8 小时会话；浏览器仅保存随机会话 Cookie，D1 仅保存其哈希，不保存 OAuth2 访问令牌或刷新令牌。生产 Cookie 使用 `Secure`、`HttpOnly`、`SameSite=Lax` 和 `__Host-` 前缀。退出登录立即删除服务端会话；移除允许名单中的 ID 后，该账号下次后台请求会被拒绝。修改登录源、客户端凭据或 ID 字段会使旧会话失效。
+登录通过 `oauth4webapi` 处理协议，授权请求绑定浏览器、使用一次性 state 与 PKCE，10 分钟后失效。用户通过允许名单校验后建立 8 小时会话；浏览器仅保存随机会话 Cookie，D1 保存其哈希与通过校验的账号、角色，不保存 OAuth2 访问令牌或刷新令牌。生产 Cookie 使用 `Secure`、`HttpOnly`、`SameSite=Lax` 和 `__Host-` 前缀。每次后台请求都会按当前 ID 与角色名单复核会话，收紧名单会拒绝不再符合条件的会话；登录源上的角色变更在重新登录时获取，现有会话最长持续 8 小时。退出登录立即删除服务端会话。修改登录源、客户端凭据、ID 字段，或启用角色检查、修改角色字段，都会使旧会话失效。
 
 OAuth2 会话下的写操作必须携带与站点一致的 `Origin`，回调成功或失败都会清除流程 Cookie，并跳转回 `/admin`。取消授权、请求过期和权限不足会显示对应提示。登录源需支持标准 JSON 令牌响应及 Bearer 用户资料请求；自定义非标准协议需另行适配。
 
@@ -193,6 +199,6 @@ npm run cf:check
 
 `cf:check` 仅预检，不上传，打包结果写入工作区 `release/status/worker/`。`.next/` 和 `.open-next/` 是框架生成的构建中间目录，不提交到仓库。OpenNext 对原生 Windows 的支持有限，生产构建推荐 Linux CI 或 WSL。
 
-`test:auth` 运行 `temp/auth/` 中的 OAuth2 回归测试，启动本地模拟登录源和独立、不持久化的真实 D1 绑定，覆盖 PKCE、两种客户端认证方式、允许名单、回调重放、跨站请求和退出撤销。无需真实 OAuth2 密钥、Cloudflare 登录或浏览器安装；测试配置与结果写入 `temp/output/`，不使用项目的 `.dev.vars` 或现有数据库。
+`test:auth` 运行 `temp/auth/` 中的 OAuth2 回归测试，启动本地模拟登录源和独立、不持久化的真实 D1 绑定，覆盖 PKCE、两种客户端认证方式、账号与角色限制、权限收紧、回调重放、跨站请求和退出撤销。无需真实 OAuth2 密钥、Cloudflare 登录或浏览器安装；测试配置与结果写入 `temp/output/`，不使用项目的 `.dev.vars` 或现有数据库。
 
 `E:\AlbaTextus\temps\status\test-cloudflare.mjs` 是 Workers 集成验证脚本，使用独立的 `temps/status/cf-tests/` 本地数据库与测试端口，不修改正式服务列表。旧 `test-management.cjs` 面向已移除的 Node 文件存储，不再适用于当前运行方式。

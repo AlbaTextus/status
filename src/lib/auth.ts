@@ -27,10 +27,13 @@ type OAuthConfig = {
   name: string;
   userIdClaim: string;
   allowedUserIds: Set<string>;
+  roleClaim: string;
+  allowedRoles: Set<string>;
   providerKey: string;
 };
 
-type StoredSession = { user_id: string; display_name: string };
+type AuthorizedUser = AdminUser & { role: string | null };
+type StoredSession = { user_id: string; display_name: string; user_role: string | null };
 type StoredFlow = { code_verifier: string };
 
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -59,14 +62,21 @@ function endpoint(value: string): URL {
   return url;
 }
 
+function parseAllowlist(value = ""): Set<string> {
+  const entries = new Set(value.split(",").map(entry => entry.trim()).filter(Boolean));
+  if ((value.trim() && !entries.size) || entries.has("*") || [...entries].some(entry => entry.length > 256)) {
+    throw configurationError();
+  }
+  return entries;
+}
+
 export function getOAuthConfig(env: StatusEnv): OAuthConfig | null {
   const required = [
     env.STATUS_OAUTH_CLIENT_ID, env.STATUS_OAUTH_CLIENT_SECRET,
     env.STATUS_OAUTH_AUTHORIZATION_URL, env.STATUS_OAUTH_TOKEN_URL,
     env.STATUS_OAUTH_USERINFO_URL, env.STATUS_OAUTH_REDIRECT_URI,
-    env.STATUS_OAUTH_ALLOWED_USER_IDS,
   ];
-  if (!required.some(value => value?.trim())) return null;
+  if (![...required, env.STATUS_OAUTH_ALLOWED_USER_IDS, env.STATUS_OAUTH_ALLOWED_ROLES].some(value => value?.trim())) return null;
   if (!required.every(value => value?.trim())) throw configurationError();
 
   const authorizationUrl = endpoint(env.STATUS_OAUTH_AUTHORIZATION_URL!.trim());
@@ -80,20 +90,26 @@ export function getOAuthConfig(env: StatusEnv): OAuthConfig | null {
   const authMethod = env.STATUS_OAUTH_TOKEN_AUTH_METHOD?.trim() || "client_secret_basic";
   if (authMethod !== "client_secret_basic" && authMethod !== "client_secret_post") throw configurationError();
   const userIdClaim = env.STATUS_OAUTH_USER_ID_CLAIM?.trim() || "sub";
-  if (!/^[A-Za-z_][\w]*(\.[A-Za-z_][\w]*)*$/.test(userIdClaim)) throw configurationError();
-  const allowedUserIds = new Set(env.STATUS_OAUTH_ALLOWED_USER_IDS!.split(",").map(value => value.trim()).filter(Boolean));
-  if (!allowedUserIds.size || allowedUserIds.has("*") || [...allowedUserIds].some(id => id.length > 256)) throw configurationError();
+  const roleClaim = env.STATUS_OAUTH_ROLE_CLAIM?.trim() || "role";
+  if (![userIdClaim, roleClaim].every(path => /^[A-Za-z_][\w]*(\.[A-Za-z_][\w]*)*$/.test(path))) throw configurationError();
+  const allowedUserIds = parseAllowlist(env.STATUS_OAUTH_ALLOWED_USER_IDS);
+  const allowedRoles = parseAllowlist(env.STATUS_OAUTH_ALLOWED_ROLES);
+  if (!allowedUserIds.size && !allowedRoles.size) throw configurationError();
 
   const clientId = env.STATUS_OAUTH_CLIENT_ID!.trim();
   const clientSecret = env.STATUS_OAUTH_CLIENT_SECRET!;
-  const providerKey = digest(JSON.stringify([issuer, authorizationUrl.href, tokenUrl.href, userInfoUrl.href, clientId, clientSecret, redirectUrl.href, userIdClaim]));
+  const providerIdentity = [issuer, authorizationUrl.href, tokenUrl.href, userInfoUrl.href, clientId, clientSecret, redirectUrl.href, userIdClaim];
+  // Roles are trusted only from the configured userinfo claim. Changing its source
+  // or enabling role checks requires a new login, including for legacy ID sessions.
+  if (allowedRoles.size) providerIdentity.push(roleClaim);
+  const providerKey = digest(JSON.stringify(providerIdentity));
   return {
     server: { issuer, authorization_endpoint: authorizationUrl.href, token_endpoint: tokenUrl.href },
     client: { client_id: clientId },
     clientSecret, authMethod, redirectUri: redirectUrl.href, userInfoUrl,
     scopes: env.STATUS_OAUTH_SCOPES?.trim() ?? "profile",
     name: env.STATUS_OAUTH_NAME?.trim().slice(0, 80) || "OAuth2",
-    userIdClaim, allowedUserIds, providerKey,
+    userIdClaim, allowedUserIds, roleClaim, allowedRoles, providerKey,
   };
 }
 
@@ -142,14 +158,20 @@ export function hasAdminToken(request: Request, env: StatusEnv) {
   return !!configured && !!supplied && timingSafeEqual(Buffer.from(digest(configured), "hex"), Buffer.from(digest(supplied), "hex"));
 }
 
+function isAllowedUser(id: string, role: string | null, config: OAuthConfig) {
+  // When both lists are configured, the ID list further restricts role access.
+  return (!config.allowedUserIds.size || config.allowedUserIds.has(id))
+    && (!config.allowedRoles.size || (role !== null && config.allowedRoles.has(role)));
+}
+
 export async function getAdminSession(request: Request, env: StatusEnv, config = getOAuthConfig(env)): Promise<AdminUser | null> {
   const token = readCookie(request, "session");
   if (!token || !config) return null;
   assertCallbackOrigin(request, config);
   const row = await env.DB.prepare(
-    "SELECT user_id, display_name FROM auth_sessions WHERE token_hash = ? AND provider_key = ? AND expires_at > ?",
+    "SELECT user_id, display_name, user_role FROM auth_sessions WHERE token_hash = ? AND provider_key = ? AND expires_at > ?",
   ).bind(digest(token), config.providerKey, nowSeconds()).first<StoredSession>();
-  if (!row || !config.allowedUserIds.has(row.user_id)) return null;
+  if (!row || !isAllowedUser(row.user_id, row.user_role, config)) return null;
   return { id: row.user_id, name: row.display_name };
 }
 
@@ -233,16 +255,18 @@ function claim(profile: unknown, path: string): unknown {
   return value;
 }
 
-function userFromProfile(profile: unknown, config: OAuthConfig): AdminUser {
+function userFromProfile(profile: unknown, config: OAuthConfig): AuthorizedUser {
   const rawId = claim(profile, config.userIdClaim);
   const id = typeof rawId === "string" ? rawId : typeof rawId === "number" && Number.isSafeInteger(rawId) ? String(rawId) : "";
   if (!id || id.length > 256) throw new AuthError(authErrorMessages.provider, 502);
-  if (!config.allowedUserIds.has(id)) throw new AuthError(authErrorMessages.forbidden, 403, "forbidden");
+  const rawRole = config.allowedRoles.size ? claim(profile, config.roleClaim) : undefined;
+  const role = typeof rawRole === "string" && rawRole.length <= 256 ? rawRole : null;
+  if (!isAllowedUser(id, role, config)) throw new AuthError(authErrorMessages.forbidden, 403, "forbidden");
   const parent = config.userIdClaim.split(".").slice(0, -1);
   const name = ["name", "display_name", "preferred_username", "username", "login"]
     .map(key => claim(profile, [...parent, key].join(".")))
     .find(value => typeof value === "string" && value.trim());
-  return { id, name: typeof name === "string" ? name.trim().slice(0, 120) : id };
+  return { id, name: typeof name === "string" ? name.trim().slice(0, 120) : id, role };
 }
 
 async function callbackResponse(request: Request, env: StatusEnv) {
@@ -292,8 +316,8 @@ async function callbackResponse(request: Request, env: StatusEnv) {
   const oldToken = readCookie(request, "session");
   await env.DB.batch([
     env.DB.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").bind(oldToken ? digest(oldToken) : ""),
-    env.DB.prepare("INSERT INTO auth_sessions (token_hash, provider_key, user_id, display_name, expires_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(digest(sessionToken), config.providerKey, user.id, user.name, nowSeconds() + SESSION_TTL),
+    env.DB.prepare("INSERT INTO auth_sessions (token_hash, provider_key, user_id, display_name, user_role, expires_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(digest(sessionToken), config.providerKey, user.id, user.name, user.role, nowSeconds() + SESSION_TTL),
   ]);
   const response = redirect(new URL("/admin", config.redirectUri));
   setCookie(response, request, "flow", "", 0);

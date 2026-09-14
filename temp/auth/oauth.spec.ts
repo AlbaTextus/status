@@ -39,6 +39,14 @@ function settings(overrides: Partial<StatusEnv> = {}): StatusEnv {
   };
 }
 
+function roleSettings(overrides: Partial<StatusEnv> = {}): StatusEnv {
+  return settings({
+    STATUS_OAUTH_ALLOWED_USER_IDS: undefined,
+    STATUS_OAUTH_ALLOWED_ROLES: "ADMIN, SUPER_ADMIN",
+    ...overrides,
+  });
+}
+
 function cookieFrom(response: Response, kind: "session" | "flow") {
   const cookie = response.headers.getSetCookie().find(value => value.includes(`status-${kind}=`) && !value.includes("Max-Age=0"));
   expect(cookie).toBeDefined();
@@ -94,8 +102,10 @@ test.beforeAll(async () => {
     d1_databases: [{ binding: "DB", database_name: "status-auth-tests", database_id: "00000000-0000-0000-0000-000000000001" }],
   }));
   platform = await getPlatformProxy<StatusEnv>({ configPath, persist: false, remoteBindings: false, envFiles: [] });
-  const migration = await readFile(path.resolve("migrations/0003_auth.sql"), "utf8");
-  await platform.env.DB.batch(migration.split(";").map(sql => sql.trim()).filter(Boolean).map(sql => platform.env.DB.prepare(sql)));
+  for (const name of ["0003_auth.sql", "0004_auth_roles.sql"]) {
+    const migration = await readFile(path.resolve("migrations", name), "utf8");
+    await platform.env.DB.batch(migration.split(";").map(sql => sql.trim()).filter(Boolean).map(sql => platform.env.DB.prepare(sql)));
+  }
 
   provider = createServer(async (request, response) => {
     const url = new URL(request.url!, providerOrigin);
@@ -223,6 +233,76 @@ test("Connect profile claims retain the administrator UUID and display name", as
     profile: { id, sub: id, display_name: "Connect 管理员", role: "SUPER_ADMIN", avatar_url: "" },
   });
   await expect(getAdminSession(adminRequest(cookie), env)).resolves.toEqual({ id, name: "Connect 管理员" });
+});
+
+for (const role of ["ADMIN", "SUPER_ADMIN"]) {
+  test(`Connect ${role} accounts can sign in without an owner UUID allowlist`, async () => {
+    const env = roleSettings({ STATUS_OAUTH_TOKEN_AUTH_METHOD: "client_secret_post" });
+    for (const id of [randomUUID(), randomUUID()]) {
+      const { cookie } = await signIn(env, {
+        authMethod: "client_secret_post",
+        profile: { id, sub: id, display_name: "Connect 管理员", role },
+      });
+      await expect(authorizeAdmin(adminRequest(cookie), env)).resolves.toBeUndefined();
+      await expect(getAdminSession(adminRequest(cookie), env)).resolves.toEqual({ id, name: "Connect 管理员" });
+      const response = await handleAuthRequest(adminRequest(cookie), env, "session");
+      expect(await response.json()).toMatchObject({ authenticated: true, method: "oauth", user: { id } });
+    }
+  });
+}
+
+test("role access rejects ordinary, missing, unknown and malformed userinfo roles", async () => {
+  const env = roleSettings();
+  for (const role of ["USER", "unknown", undefined, null, "super_admin", "*", "ADMIN,SUPER_ADMIN", 4, ["SUPER_ADMIN"], { role: "SUPER_ADMIN" }]) {
+    const flow = await start(env);
+    const response = await handleAuthRequest(callbackRequest(flow, { profile: { sub: "admin-1", role } }), env, "callback");
+    expect(errorCode(response)).toBe("forbidden");
+    expect(response.headers.getSetCookie().some(value => value.includes("status-session="))).toBe(false);
+  }
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM auth_sessions").first("count")).toBe(0);
+});
+
+test("explicit user IDs further restrict access when roles are also configured", async () => {
+  const env = roleSettings({ STATUS_OAUTH_ALLOWED_USER_IDS: "admin-1" });
+  for (const profile of [{ sub: "another-admin", role: "SUPER_ADMIN" }, { sub: "admin-1", role: "USER" }, { sub: "admin-1" }]) {
+    const flow = await start(env);
+    expect(errorCode(await handleAuthRequest(callbackRequest(flow, { profile }), env, "callback"))).toBe("forbidden");
+  }
+  const { cookie } = await signIn(env, { profile: { sub: "admin-1", role: "SUPER_ADMIN" } });
+  await expect(authorizeAdmin(adminRequest(cookie), env)).resolves.toBeUndefined();
+  await expect(getAdminSession(adminRequest(cookie), { ...env, STATUS_OAUTH_ALLOWED_USER_IDS: "another-admin" })).resolves.toBeNull();
+});
+
+test("role authorization uses only the configured nested userinfo claim", async () => {
+  const env = roleSettings({ STATUS_OAUTH_USER_ID_CLAIM: "data.id", STATUS_OAUTH_ROLE_CLAIM: "data.access.role" });
+  const { cookie } = await signIn(env, { profile: { data: { id: 42, username: "nested-admin", access: { role: "SUPER_ADMIN" } } } });
+  await expect(getAdminSession(adminRequest(cookie), env)).resolves.toEqual({ id: "42", name: "nested-admin" });
+  for (const data of [{ id: 42 }, { id: 42, access: { role: "USER" } }]) {
+    const flow = await start(env);
+    const response = await handleAuthRequest(callbackRequest(flow, { profile: { role: "SUPER_ADMIN", data } }), env, "callback");
+    expect(errorCode(response)).toBe("forbidden");
+  }
+});
+
+test("tightening allowed roles revokes affected sessions on their next admin request", async () => {
+  const env = roleSettings();
+  const admin = await signIn(env, { profile: { sub: "admin-1", role: "ADMIN" } });
+  const superAdmin = await signIn(env, { profile: { sub: "another-admin", role: "SUPER_ADMIN" } });
+  const restricted = { ...env, STATUS_OAUTH_ALLOWED_ROLES: "SUPER_ADMIN" };
+  await expect(authorizeAdmin(adminRequest(admin.cookie), restricted)).rejects.toMatchObject({ status: 401 });
+  await expect(authorizeAdmin(adminRequest(superAdmin.cookie), restricted)).resolves.toBeUndefined();
+  const response = await handleAuthRequest(adminRequest(admin.cookie), restricted, "session");
+  expect(await response.json()).toMatchObject({ authenticated: false, user: null });
+});
+
+test("enabling role access or changing its claim requires a new verified login", async () => {
+  const legacy = await signIn();
+  const env = roleSettings();
+  await expect(getAdminSession(adminRequest(legacy.cookie), env)).resolves.toBeNull();
+  const { cookie } = await signIn(env, { profile: { sub: "admin-1", role: "SUPER_ADMIN" } });
+  await expect(getAdminSession(adminRequest(cookie), { ...env, STATUS_OAUTH_ROLE_CLAIM: "data.role" })).resolves.toBeNull();
+  await env.DB.prepare("UPDATE auth_sessions SET user_role = NULL").run();
+  await expect(authorizeAdmin(adminRequest(cookie), env)).rejects.toMatchObject({ status: 401 });
 });
 
 test("missing or malformed browser binding and state never reach the token endpoint", async () => {
@@ -435,6 +515,12 @@ test("the OAuth2 callback remains restricted to the exact registered origin", as
 test("invalid configuration and unsafe identity values fail closed", async () => {
   for (const overrides of [
     { STATUS_OAUTH_ALLOWED_USER_IDS: "*" }, { STATUS_OAUTH_ALLOWED_USER_IDS: ", ," },
+    { STATUS_OAUTH_ALLOWED_USER_IDS: undefined },
+    { STATUS_OAUTH_ALLOWED_USER_IDS: "", STATUS_OAUTH_ALLOWED_ROLES: "" },
+    { STATUS_OAUTH_ALLOWED_ROLES: "*" }, { STATUS_OAUTH_ALLOWED_ROLES: ", ," },
+    { STATUS_OAUTH_ALLOWED_USER_IDS: ", ,", STATUS_OAUTH_ALLOWED_ROLES: "SUPER_ADMIN" },
+    { STATUS_OAUTH_ALLOWED_ROLES: "a".repeat(257) },
+    { STATUS_OAUTH_ROLE_CLAIM: "data..role", STATUS_OAUTH_ALLOWED_ROLES: "SUPER_ADMIN" },
     { STATUS_OAUTH_TOKEN_URL: "http://external.example/token" },
     { STATUS_OAUTH_USERINFO_URL: "https://user:password@example.com/profile" },
     { STATUS_OAUTH_REDIRECT_URI: "https://status.example/admin?redirect=evil" },

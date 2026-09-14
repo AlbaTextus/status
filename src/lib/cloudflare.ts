@@ -15,6 +15,8 @@ export interface StatusEnv {
   STATUS_OAUTH_SCOPES?: string;
   STATUS_OAUTH_USER_ID_CLAIM?: string;
   STATUS_OAUTH_ALLOWED_USER_IDS?: string;
+  STATUS_OAUTH_ROLE_CLAIM?: string;
+  STATUS_OAUTH_ALLOWED_ROLES?: string;
   STATUS_OAUTH_TOKEN_AUTH_METHOD?: string;
 }
 

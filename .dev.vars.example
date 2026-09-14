@@ -1,7 +1,7 @@
 STATUS_ADMIN_TOKEN=replace-with-a-long-random-admin-token
 
 # Connect 本地接入：在相邻 connect 仓库运行 go run ./cmd/register-status 自动填写 .dev.vars。
-# 手动配置时，取消下面必填项的注释并填写已登记的应用密钥和管理员 UUID。
+# 手动配置时，取消下面配置的注释并填写已登记的应用密钥。
 # 仅使用 OAuth2 时可以删除 STATUS_ADMIN_TOKEN。
 # STATUS_OAUTH_NAME=ALBATEXTUS Connect
 # STATUS_OAUTH_CLIENT_ID=albatextus-status
@@ -10,10 +10,14 @@ STATUS_ADMIN_TOKEN=replace-with-a-long-random-admin-token
 # STATUS_OAUTH_TOKEN_URL=http://localhost:3000/oauth/token
 # STATUS_OAUTH_USERINFO_URL=http://localhost:3000/api/v1/user
 # STATUS_OAUTH_REDIRECT_URI=http://127.0.0.1:3100/api/auth/callback
-# STATUS_OAUTH_ALLOWED_USER_IDS=connect-admin-user-uuid
+# STATUS_OAUTH_ALLOWED_ROLES=ADMIN,SUPER_ADMIN
+# STATUS_OAUTH_ROLE_CLAIM=role
 
 # Connect 使用表单客户端认证、profile 权限和 sub 用户字段，不申请 openid。
 # STATUS_OAUTH_TOKEN_AUTH_METHOD=client_secret_post
 # STATUS_OAUTH_SCOPES=profile
 # STATUS_OAUTH_USER_ID_CLAIM=sub
 # STATUS_OAUTH_ISSUER=http://localhost:3000
+
+# 可选：额外限制固定账号；配置后，账号必须同时满足角色和 UUID 两项要求。
+# STATUS_OAUTH_ALLOWED_USER_IDS=connect-admin-user-uuid
