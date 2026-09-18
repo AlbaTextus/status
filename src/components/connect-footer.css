@@ -30,6 +30,8 @@
 }
 
 .home-footer > .home-container { container-type: inline-size; }
+.home-footer-links { display: flex; align-items: center; gap: 14px; }
+.home-footer-links-divider { width: 1px; height: 14px; background: var(--border); }
 .home-footer-github { display: inline-flex; align-items: center; min-height: 40px; color: var(--muted-foreground); transition: color 160ms ease; }
 .home-footer-github:hover { color: var(--foreground); }
 .home-footer-github:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 4px; }
@@ -83,18 +85,6 @@
 @media (prefers-reduced-motion: reduce) {
   .home-footer-column > a, .home-footer-column > a::after { transition: none; }
   .home-footer-column > a:is(:hover, :focus-visible) { transform: none; }
-}
-
-.home-footer-projects {
-  gap: 0;
-}
-
-.home-footer-projects h2 {
-  margin-bottom: 2px;
-}
-
-.home-footer-projects > a {
-  line-height: 18px;
 }
 
 .home-footer-bottom {
