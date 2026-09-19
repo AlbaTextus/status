@@ -26,6 +26,8 @@ npm run cf:deploy
 
 Cloudflare Git 构建的项目根目录设置为 `status`，构建命令 `npm run cf:build`，部署命令 `npx opennextjs-cloudflare deploy`。首次构建前须完成 D1 创建、绑定、迁移与 Secret 配置。后续新增数据库迁移也需先执行 `db:migrate:remote`。
 
+页脚的隐私政策与服务条款链接指向独立的 ALBATEXTUS Wiki，地址由 `NEXT_PUBLIC_WIKI_URL` 决定（默认 `http://localhost:3200`）。该变量在 `next build` 时内联，线上需写入 Cloudflare 构建环境变量，修改后重新构建；本地可复制 `.env.example` 为 `.env.local` 覆盖。
+
 ## 本地开发与 Workers 预览
 
 ```powershell

@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Activity, Images, Link as LinkIcon, type LucideIcon } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { wikiUrl } from "@/lib/wiki"
 
 /** Community repositories shown as icons beside the organisation link. */
 const projects: { id: string; name: string; description: string; Icon: LucideIcon }[] = [
@@ -40,7 +41,7 @@ export function SiteFooter() {
         </div>
       </div>
       <Separator />
-      <div className="home-footer-bottom"><p>© 2026 ALBATEXTUS</p><nav className="home-footer-legal" aria-label="法律信息"><Link href="/wiki/privacy">隐私政策</Link><Link href="/wiki/terms">服务条款</Link></nav></div>
+      <div className="home-footer-bottom"><p>© 2026 ALBATEXTUS</p><nav className="home-footer-legal" aria-label="法律信息"><a href={wikiUrl("/privacy")}>隐私政策</a><a href={wikiUrl("/terms")}>服务条款</a></nav></div>
       <div className="home-footer-watermark" aria-hidden="true">ALBATEXTUS</div>
     </div>
   </footer>
