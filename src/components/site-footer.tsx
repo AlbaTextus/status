@@ -1,14 +1,20 @@
 import Link from "next/link"
-import { Activity, Images, Link as LinkIcon, type LucideIcon } from "lucide-react"
+import { Activity, createLucideIcon, Images, Link as LinkIcon, type LucideIcon } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { wikiUrl } from "@/lib/wiki"
+
+const WikiIcon = createLucideIcon("Wiki", [
+  ["path", { d: "M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a2.5 2.5 0 0 1 0-5H20", key: "book" }],
+  ["path", { d: "M8 8l1.5 6 2.5-4 2.5 4L16 8", key: "wiki" }],
+])
 
 /** Community repositories shown as icons beside the organisation link. */
 const projects: { id: string; name: string; description: string; Icon: LucideIcon }[] = [
   { id: "connect", name: "Connect", description: "统一登录与授权", Icon: LinkIcon },
   { id: "imgbed", name: "ImgBed", description: "图床", Icon: Images },
   { id: "status", name: "Status", description: "服务状态", Icon: Activity },
+  { id: "wiki", name: "Wiki", description: "文档中心", Icon: WikiIcon },
 ]
 
 export function SiteFooter() {
