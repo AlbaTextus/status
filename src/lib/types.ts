@@ -42,8 +42,7 @@ export const defaultAutoPublishRules: AutoPublishRules = {
 };
 
 export type Store = { version: 1; services: Service[]; incidents: Incident[]; rules?: AutoPublishRules };
-export type PublicService = Omit<Service, "url" | "revision">;
+export type PublicService = Omit<Service, "url" | "revision"> & { websiteUrl?: string };
 export type PublicState = { services: PublicService[]; incidents: Incident[]; generatedAt: string; intervalSeconds: number };
 export const statusLabels: Record<HealthStatus, string> = { operational: "运行正常", maintenance: "维护中", error: "服务异常", unknown: "等待检测" };
 export const unchecked: HealthResult = { status: "unknown", code: null, latency: null, checkedAt: null, message: "尚未检测" };
-

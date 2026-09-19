@@ -3,6 +3,7 @@ import { readDatabase, mutateDatabase } from "./d1-store";
 import type { D1Database } from "@cloudflare/workers-types";
 import type { PublicState, Store } from "./types";
 import { startInternalScheduler } from "./scheduler";
+import { serviceWebsiteUrl } from "./service-url";
 
 export async function readStore(database?: D1Database): Promise<Store> {
   if (typeof process !== "undefined" && process.env.NEXT_RUNTIME === "nodejs") {
@@ -40,6 +41,7 @@ export async function publicState(): Promise<PublicState> {
     services: state.services.map(({
       id,
       name,
+      url,
       result,
       history,
       timeline,
@@ -52,6 +54,7 @@ export async function publicState(): Promise<PublicState> {
     }) => ({
       id,
       name,
+      websiteUrl: serviceWebsiteUrl(url),
       history: history ?? [],
       timeline: timeline ?? [],
       failingSince: failingSince ?? null,
@@ -69,4 +72,3 @@ export async function publicState(): Promise<PublicState> {
     intervalSeconds: 60,
   };
 }
-

@@ -27,7 +27,7 @@ if (!binding) throw new Error("Wrangler 配置缺少 DB 绑定");
 if (target === "--remote" && (!binding.database_id || binding.database_id.startsWith("00000000-"))) {
   throw new Error("请先在 wrangler.jsonc 填写真实 D1 database_id");
 }
-const temporaryRoot = path.resolve(project, "../temps/status");
+const temporaryRoot = path.resolve(project, "../temp/status");
 await mkdir(temporaryRoot, { recursive: true });
 const temporary = await mkdtemp(path.join(temporaryRoot, "import-"));
 const configPath = path.join(temporary, "wrangler.json");

@@ -60,6 +60,20 @@ export async function adminAction(input: unknown) {
       break;
     }
 
+    case "reorderServices": {
+      const ids = data.ids;
+      if (!Array.isArray(ids) || ids.length > 50 || ids.some(id => typeof id !== "string") || new Set(ids).size !== ids.length) {
+        throw new AdminError("服务排序必须包含不重复的服务 ID");
+      }
+      await mutateStore(state => {
+        const services = new Map(state.services.map(service => [service.id, service]));
+        if (ids.length !== services.size || ids.some(id => !services.has(id))) {
+          throw new AdminError("服务列表已变化，请刷新后重新排序", 409);
+        }
+        state.services = ids.map(id => services.get(id)!);
+      });
+      break;
+    }
     case "deleteService":
       await mutateStore(state => { const id = text(data.id, "服务 ID"); if (!state.services.some(item => item.id === id)) throw new AdminError("服务不存在", 404); state.services = state.services.filter(item => item.id !== id); state.incidents.forEach(incident => { if (incident.serviceId === id) incident.serviceId = null; }); }); break;
     case "check": {

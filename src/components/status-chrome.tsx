@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Activity, History, RefreshCw, Settings2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
+import { SiteFooter as PublicSiteFooter } from "./site-footer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "./ui/button";
 
@@ -164,4 +165,10 @@ export function StatusHeader({ admin = false, onRefresh, refreshing = false }: {
   );
 }
 
-export { SiteFooter, StatusFooter } from "./site-footer";
+export function SiteFooter() {
+  const pathname = usePathname();
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return null;
+  return <PublicSiteFooter />;
+}
+
+export { SiteFooter as StatusFooter };

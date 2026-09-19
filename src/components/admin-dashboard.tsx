@@ -17,6 +17,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "./
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Separator } from "./ui/separator";
+import { SortableServiceList } from "./sortable-service-list";
 import { defaultAutoPublishRules, type AutoPublishRules, type Incident, type Service, type Store, type UpdateStatusKind } from "@/lib/types";
 
 type ServiceDraft = {
@@ -77,6 +78,7 @@ function AuthenticatedDashboard({ identity, onUnauthorized, sessionPanel }: {
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [busy,setBusy]=useState(false);
+  const [draggingServices, setDraggingServices] = useState(false);
   const [incidentPage,setIncidentPage]=useState(1);
   const [serviceDraft,setServiceDraft]=useState<ServiceDraft|null>(null);
   const [eventDraft,setEventDraft]=useState<EventDraft|null>(null);
@@ -143,11 +145,11 @@ function AuthenticatedDashboard({ identity, onUnauthorized, sessionPanel }: {
   }, [token, onUnauthorized]);
   const ready = data !== null;
   useEffect(()=>{
-    if(!ready||busy)return;
+    if(!ready||busy||draggingServices)return;
     let active=true;const controller=new AbortController();
     const timer=setInterval(async()=>{try{const response=await fetch("/api/admin",{headers:token?{"x-admin-token":token}:undefined,cache:"no-store",signal:controller.signal});const value=await response.json();if(!active)return;if(response.status===401){onUnauthorized();return;}if(!response.ok)throw new Error(value.error);setData(value);}catch(e){if(active)setError(e instanceof Error?e.message:"状态刷新失败");}},10000);
     return()=>{active=false;controller.abort();clearInterval(timer);};
-  },[ready,busy,token,onUnauthorized]);
+  },[ready,busy,draggingServices,token,onUnauthorized]);
 
   async function act(body:Record<string,unknown>,success:string){
     setBusy(true);setFormError("");setError("");setNotice("");
@@ -171,6 +173,15 @@ function AuthenticatedDashboard({ identity, onUnauthorized, sessionPanel }: {
       setBusy(false);
     }
   }
+  async function reorderServices(services: Service[]) {
+    if (!data || busy) return;
+    const previous = data.services;
+    setData({ ...data, services });
+    if (!await act({ action: "reorderServices", ids: services.map(service => service.id) }, "服务顺序已保存")) {
+      setData(current => current ? { ...current, services: previous } : current);
+    }
+  }
+
   function editService(service?:Service){
     setFormError("");
     setServiceDraft(service ? {
@@ -284,16 +295,16 @@ function AuthenticatedDashboard({ identity, onUnauthorized, sessionPanel }: {
     {!data&&error&&<Button variant="outline" onClick={()=>load()}>重试</Button>}
     {data&&(
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
-      <section className="system-panel admin-section"><div className="admin-section-heading"><div><h2>服务管理 <span>{data.services.length}</span></h2><p>每项服务独立检测，不划分子组件。</p></div><div className="flex gap-2"><Button variant="outline" disabled={busy||!data.services.length} onClick={()=>act({action:"check"},"已完成全部服务检测")}><RefreshCw data-icon="inline-start" className={busy?"animate-spin":undefined}/>全部检测</Button><Button disabled={busy} onClick={()=>editService()}><Plus data-icon="inline-start"/>添加服务</Button></div></div><Separator/>
+      <section className="system-panel admin-section"><div className="admin-section-heading"><div><h2>服务管理 <span>{data.services.length}</span></h2><p>拖动左侧手柄调整顺序，自动保存并同步至状态页。</p></div><div className="flex gap-2"><Button variant="outline" disabled={busy||!data.services.length} onClick={()=>act({action:"check"},"已完成全部服务检测")}><RefreshCw data-icon="inline-start" className={busy?"animate-spin":undefined}/>全部检测</Button><Button disabled={busy} onClick={()=>editService()}><Plus data-icon="inline-start"/>添加服务</Button></div></div><Separator/>
         {data.services.length ? (
-          data.services.map(service => {
+          <SortableServiceList services={data.services} disabled={busy} onDraggingChange={setDraggingServices} onReorder={reorderServices}>{service => {
             const srvRules = service.rules ?? activeRules;
             const srvErrorMs = (srvRules.errorThresholdMinutes || 5) * 60000;
             const srvMaintMs = (srvRules.maintenanceThresholdMinutes || 5) * 60000;
             const srvRecovMs = (srvRules.recoveryThresholdMinutes || 5) * 60000;
 
             return (
-              <div className="admin-service-row" key={service.id}>
+              <>
                 <div className="admin-service-copy">
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <h3>{service.name}</h3>
@@ -368,9 +379,9 @@ function AuthenticatedDashboard({ identity, onUnauthorized, sessionPanel }: {
                     <Trash2 />
                   </Button>
                 </div>
-              </div>
+              </>
             );
-          })
+          }}</SortableServiceList>
         ) : (
           <Empty>
             <EmptyHeader>

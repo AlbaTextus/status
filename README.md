@@ -58,7 +58,7 @@ npm run cf:preview
 curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*"
 ```
 
-本地 D1 统一保存在工作区 `temps/status/cloudflare-state/v3/`，开发、预览、迁移和导入共用此目录；与云端 D1 隔离。`npm start` 也是 Workers 预览，需要先完成 `cf:build`。不要再用 `next start` 作为生产运行方式。
+本地 D1 统一保存在工作区 `temp/status/cloudflare-state/v3/`，开发、预览、迁移和导入共用此目录；与云端 D1 隔离。`npm start` 也是 Workers 预览，需要先完成 `cf:build`。不要再用 `next start` 作为生产运行方式。
 
 ## 检测规则
 
@@ -181,7 +181,7 @@ npm run db:import -- data/status.json --local
 npm run db:import -- data/status.json --remote
 ```
 
-导入工具仅接受空数据库，保留服务 ID、事件、草稿、更新时间和历史，拒绝覆盖非空数据库。云端导入通过已登录的 Wrangler 远程 D1 绑定执行；请显式选择 `--remote`。工具的临时配置放在工作区 `temps/status/`，不会修改源 JSON。
+导入工具仅接受空数据库，保留服务 ID、事件、草稿、更新时间和历史，拒绝覆盖非空数据库。云端导入通过已登录的 Wrangler 远程 D1 绑定执行；请显式选择 `--remote`。工具的临时配置放在工作区 `temp/status/`，不会修改源 JSON。
 
 云端备份可使用 D1 的 Time Travel，或导出 SQL 到工作区 `release/`：
 
@@ -203,4 +203,4 @@ npm run cf:check
 
 `test:auth` 运行 `temp/auth/` 中的 OAuth2 回归测试，启动本地模拟登录源和独立、不持久化的真实 D1 绑定，覆盖 PKCE、两种客户端认证方式、账号与角色限制、权限收紧、回调重放、跨站请求和退出撤销。无需真实 OAuth2 密钥、Cloudflare 登录或浏览器安装；测试配置与结果写入 `temp/output/`，不使用项目的 `.dev.vars` 或现有数据库。
 
-`E:\AlbaTextus\temps\status\test-cloudflare.mjs` 是 Workers 集成验证脚本，使用独立的 `temps/status/cf-tests/` 本地数据库与测试端口，不修改正式服务列表。旧 `test-management.cjs` 面向已移除的 Node 文件存储，不再适用于当前运行方式。
+`E:\AlbaTextus\temp\status\test-cloudflare.mjs` 是 Workers 集成验证脚本，使用独立的 `temp/status/cf-tests/` 本地数据库与测试端口，不修改正式服务列表。旧 `test-management.cjs` 面向已移除的 Node 文件存储，不再适用于当前运行方式。

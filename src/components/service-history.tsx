@@ -20,12 +20,14 @@ export function ServiceHistory({ services, now }: { services: PublicService[]; n
       const buckets = new Map(history.map(slice => [slice.slot, slice]));
       return <section className="history-service" key={service.id} aria-label={`${service.name} 状态历史`}>
         <div className="history-service-heading"><div className="history-service-name">
-          <Tooltip>
-            <TooltipTrigger render={<h3 tabIndex={0} className={cn("history-service-title", `health-${service.result.status}`)} />}>
+          <h3><Tooltip>
+            <TooltipTrigger render={service.websiteUrl
+              ? <a href={service.websiteUrl} className={cn("history-service-title", `health-${service.result.status}`)} />
+              : <span tabIndex={0} className={cn("history-service-title", `health-${service.result.status}`)} />}>
               {service.name}
             </TooltipTrigger>
             <TooltipContent>{statusLabels[service.result.status]}</TooltipContent>
-          </Tooltip>
+          </Tooltip></h3>
         </div><span className="history-uptime" data-level={percentageLevel}>{percentage ?? "暂无数据"}</span></div>
         <div className="history-bars" aria-label="过去 24 小时，共 90 格，每格代表 16 分钟的检测状态">
           {slots.map(slot => {

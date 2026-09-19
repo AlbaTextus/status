@@ -149,6 +149,8 @@
   border-radius: 4px;
 }
 .history-service-title.health-operational { color: #149c79; }
+a.history-service-title { cursor: pointer; text-decoration: none; }
+a.history-service-title:hover { text-decoration: underline; text-underline-offset: 4px; }
 .history-service-title.health-maintenance { color: #b68015; }
 .history-service-title.health-error { color: #dc424e; }
 .history-service-title.health-unknown { color: var(--muted-foreground); }
@@ -313,6 +315,11 @@
 .admin-section-heading h2 > span { display: inline-flex; margin-left: 6px; font-size: 11px; color: var(--muted-foreground); }
 .admin-section-heading p { margin-top: 5px; font-size: 12px; color: var(--muted-foreground); }
 .admin-service-row, .admin-event-row { display: flex; align-items: center; gap: 22px; padding: 18px 20px; border-bottom: 1px solid var(--divider); }
+.admin-service-row { position: relative; background: var(--card); }
+.admin-service-row[data-dragging] { z-index: 1; box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 12%, transparent); }
+.service-drag-handle { flex-shrink: 0; touch-action: none; cursor: grab; color: var(--muted-foreground); }
+.service-drag-handle:active { cursor: grabbing; }
+.service-drag-handle:disabled { cursor: default; }
 .admin-service-copy, .admin-event-copy { flex: 1; min-width: 0; }
 .admin-service-copy h3, .admin-event-copy h3 { font-size: 14px; font-weight: 500; margin-bottom: 7px; overflow-wrap: anywhere; }
 .admin-service-copy p { font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; margin-bottom: 5px; }
@@ -364,7 +371,7 @@
   .last-checked { margin-left: 0; flex-basis: 100%; }
   .admin-section-heading { padding: 16px; flex-wrap: wrap; gap: 14px; }
   .admin-service-row, .admin-event-row { padding: 16px; gap: 12px; flex-wrap: wrap; }
-  .admin-service-copy { flex-basis: calc(100% - 110px); }
+  .admin-service-copy { flex-basis: calc(100% - 60px); }
   .admin-service-row > .row-actions { margin-left: auto; }
   .admin-rule { padding: 12px 16px; gap: 10px; }
   .admin-rule > span:last-child { margin-left: 0; flex-basis: 100%; }
