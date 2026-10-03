@@ -6,6 +6,8 @@ if (process.env.NODE_ENV === "development") {
 }
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@albatextus/ui"],
+  distDir: process.env.NEXT_OUTPUT_DIR || ".next",
   allowedDevOrigins: ["localhost", "127.0.0.1"],
 };
 

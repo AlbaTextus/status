@@ -22,6 +22,7 @@
     "db:import": "node scripts/import-json.mjs"
   },
   "dependencies": {
+    "@albatextus/ui": "file:release/albatextus-ui-0.1.0-diagram.tgz",
     "@base-ui/react": "^1.8.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",

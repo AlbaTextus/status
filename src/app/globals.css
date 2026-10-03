@@ -1,7 +1,4 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "../components/connect-header.css";
-@import "../components/connect-footer.css";
+@import "@albatextus/ui/styles.css";
 
 @custom-variant dark (&:is(.dark *));
 @theme inline {

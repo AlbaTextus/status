@@ -1,6 +1,8 @@
 # AlbaTextus Status
 
-少量服务的独立状态板块与手动事件发布后台。初始服务列表和事件列表均为空，没有演示数据。导航栏复用 Connect，页面延续简洁的白底细边框风格。
+少量服务的独立状态板块与手动事件发布后台。首页展示 OAuth、Forum、Credit、ImgBed、ATHub、Wiki、Status 与共享 UI 的服务关联图；点击节点可高亮关联，支持键盘和移动端。架构关系是静态说明，节点颜色区分服务类别，不代表实时健康状态。关系数据维护在 `src/components/service-network.tsx`，节点尺寸与缩放复用 `@albatextus/ui`。
+
+实时服务状态位于 `/status`，事件历史与管理后台仍位于 `/history` 和 `/admin`。初始监控服务列表和事件列表均为空，没有演示数据。导航栏复用共享 UI，页面延续简洁的白底细边框风格。
 
 ## Cloudflare Workers + D1 部署
 
@@ -39,7 +41,8 @@ npm run db:migrate:local
 npm run dev -- --hostname 127.0.0.1 --port 3100
 ```
 
-- 状态页：`http://127.0.0.1:3100/`
+- 服务全景首页：`http://127.0.0.1:3100/`
+- 状态页：`http://127.0.0.1:3100/status`
 - 管理后台：`http://127.0.0.1:3100/admin`
 - 只读状态接口：`/api/status`
 - 本服务健康接口：`/healthz`

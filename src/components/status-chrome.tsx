@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Activity, History, RefreshCw, Settings2 } from "lucide-react";
+import { Activity, History, Network, RefreshCw, Settings2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter as PublicSiteFooter } from "./site-footer";
@@ -133,9 +133,9 @@ export function StatusHeader({ admin = false, onRefresh, refreshing = false }: {
     ? "/admin"
     : (pathname.startsWith("/incidents") || pathname === "/history")
     ? "/history"
-    : "/";
+    : pathname === "/status" ? "/status" : "/";
 
-  const isStatusPage = pathname === "/" || pathname === "";
+  const isStatusPage = pathname === "/status";
 
   const actions = (
     <>
@@ -152,7 +152,8 @@ export function StatusHeader({ admin = false, onRefresh, refreshing = false }: {
   return (
     <SiteHeader
       items={[
-        { href: "/", title: "服务状态", icon: Activity },
+        { href: "/", title: "服务全景", icon: Network },
+        { href: "/status", title: "服务状态", icon: Activity },
         { href: "/history", title: "历史记录", icon: History },
         ...(authenticated ? [{ href: "/admin", title: "后台管理", icon: Settings2 }] : []),
       ]}
@@ -167,7 +168,7 @@ export function StatusHeader({ admin = false, onRefresh, refreshing = false }: {
 
 export function SiteFooter() {
   const pathname = usePathname();
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) return null;
+  if (pathname === "/status" || pathname === "/admin" || pathname.startsWith("/admin/")) return null;
   return <PublicSiteFooter />;
 }
 
