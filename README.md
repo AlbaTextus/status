@@ -1,12 +1,16 @@
 # AlbaTextus Status
 
-少量服务的独立状态板块与手动事件发布后台。首页展示 OAuth、Forum、Credit、ImgBed、ATHub、Wiki、Status 与共享 UI 的服务关联图；点击节点可高亮关联，支持键盘和移动端。架构关系是静态说明，节点颜色区分服务类别，不代表实时健康状态。关系数据维护在 `src/components/service-network.tsx`，节点尺寸与缩放复用 `@albatextus/ui`。
+少量服务的独立状态板块与手动事件发布后台。访问网站根路径会直接跳转到 `/status` 服务状态页。页头、页脚、品牌组件、基础样式及字体资源均在项目内维护，无需 ATUI 包或跨项目源码引用。
 
-实时服务状态位于 `/status`，事件历史与管理后台仍位于 `/history` 和 `/admin`。初始监控服务列表和事件列表均为空，没有演示数据。导航栏复用共享 UI，页面延续简洁的白底细边框风格。
+公开页面页脚复用 Docs 的本地实现：品牌与 GitHub 入口，以及随滚动描绘的蓝粉星尘字标；后台不显示页脚。
+
+实时服务状态位于 `/status`，事件历史与管理后台位于 `/history` 和 `/admin`。初始监控服务列表和事件列表均为空，没有演示数据。导航栏使用项目内组件，页面延续简洁的白底细边框风格。
 
 ## Cloudflare Workers + D1 部署
 
 使用 OpenNext 将 Next.js 部署到 **Cloudflare Workers**，服务与事件保存到 **D1**，每分钟通过 Cron Trigger 执行健康检测。不需要常驻 Node 服务或外部数据库。Node.js 要求 **22.18+**；首次部署需要 Cloudflare 账号和 Wrangler 登录。
+
+生产地址为 `https://status.albatextus.com`，Worker 名称为 `albatextus-status`。`wrangler.jsonc` 已绑定生产 D1 数据库和自定义域名；后续发布复用这些资源，不需要再次创建数据库。本地生产管理密钥单独保存在被 Git 忽略的 `.dev.vars.production` 中，通过 Wrangler Secret 上传，不复用开发环境的 OAuth2 配置。
 
 在 `status/` 目录执行：
 
@@ -26,14 +30,14 @@ npm run cf:deploy
 
 密钥命令会交互式读取长随机管理密钥，不要将其写进 Wrangler 配置或提交到仓库。部署命令会输出 `workers.dev` 地址；自定义域名可以在 Cloudflare 控制台的 Worker 设置中添加。修改 Worker 名称时，要同步修改 `services[0].service` 自引用绑定。
 
-Cloudflare Git 构建的项目根目录设置为 `status`，构建命令 `npm run cf:build`，部署命令 `npx opennextjs-cloudflare deploy`。首次构建前须完成 D1 创建、绑定、迁移与 Secret 配置。后续新增数据库迁移也需先执行 `db:migrate:remote`。
+若为独立的 `AlbaTextus/status` 仓库配置 Cloudflare Git 构建，项目根目录设置为 `/`，构建命令 `npm run cf:build`，部署命令 `npx opennextjs-cloudflare deploy`。首次构建前须完成 D1 创建、绑定、迁移与 Secret 配置。后续新增数据库迁移也需先执行 `db:migrate:remote`。
 
 页脚的隐私政策与服务条款链接指向独立的 ALBATEXTUS Wiki，地址由 `NEXT_PUBLIC_WIKI_URL` 决定（默认 `http://localhost:3200`）。该变量在 `next build` 时内联，线上需写入 Cloudflare 构建环境变量，修改后重新构建；本地可复制 `.env.example` 为 `.env.local` 覆盖。
 
 ## 本地开发与 Workers 预览
 
 ```powershell
-cd E:\AlbaTextus\status
+cd D:\AlbaTextus\status
 npm ci
 Copy-Item .dev.vars.example .dev.vars
 # 编辑 .dev.vars，设置本地 STATUS_ADMIN_TOKEN
@@ -206,4 +210,4 @@ npm run cf:check
 
 `test:auth` 运行 `temp/auth/` 中的 OAuth2 回归测试，启动本地模拟登录源和独立、不持久化的真实 D1 绑定，覆盖 PKCE、两种客户端认证方式、账号与角色限制、权限收紧、回调重放、跨站请求和退出撤销。无需真实 OAuth2 密钥、Cloudflare 登录或浏览器安装；测试配置与结果写入 `temp/output/`，不使用项目的 `.dev.vars` 或现有数据库。
 
-`E:\AlbaTextus\temp\status\test-cloudflare.mjs` 是 Workers 集成验证脚本，使用独立的 `temp/status/cf-tests/` 本地数据库与测试端口，不修改正式服务列表。旧 `test-management.cjs` 面向已移除的 Node 文件存储，不再适用于当前运行方式。
+`D:\AlbaTextus\temp\status\test-cloudflare.mjs` 是 Workers 集成验证脚本，使用独立的 `temp/status/cf-tests/` 本地数据库与测试端口，不修改正式服务列表。旧 `test-management.cjs` 面向已移除的 Node 文件存储，不再适用于当前运行方式。

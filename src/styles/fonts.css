@@ -1,0 +1,39 @@
+@import "../fonts/maple-mono-cn/regular.css";
+@import "../fonts/maple-mono-cn/medium.css";
+
+@font-face {
+  font-family: "Maple Mono";
+  src: url("../fonts/MapleMono[wght]-VF.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Maple Mono";
+  src: url("../fonts/MapleMono-Italic[wght]-VF.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+
+:root {
+  --atui-font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --atui-font-sans: "Maple Mono", "Maple Mono CN", var(--atui-font-system);
+  --atui-font-mono: "Maple Mono", "Maple Mono CN", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --atui-font-brand: Arial, "Helvetica Neue", sans-serif;
+  --font-sans: var(--atui-font-sans);
+  --font-mono: var(--atui-font-mono);
+  --font-brand: var(--atui-font-brand);
+}
+
+:root[data-atui-font="system"] {
+  --atui-font-sans: var(--atui-font-system);
+}
+
+@theme inline {
+  --font-sans: var(--atui-font-sans);
+  --font-heading: var(--atui-font-sans);
+  --font-mono: var(--atui-font-mono);
+}

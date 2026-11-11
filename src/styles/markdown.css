@@ -1,0 +1,25 @@
+.legal-markdown { text-align: left; }
+.legal-markdown { overflow-wrap: anywhere; font-size: 14px; line-height: 1.85; }
+.legal-markdown > :first-child { margin-top: 0; }
+.legal-markdown :is(h2, h3, h4, h5, h6) { margin: 24px 0 10px; font-weight: 600; line-height: 1.5; color: var(--foreground); }
+.legal-markdown h2 { font-size: 18px; }
+.legal-markdown h3 { font-size: 16px; }
+.legal-markdown p { margin: 12px 0; }
+.legal-markdown :is(ul, ol) { margin: 12px 0; padding-inline-start: 24px; }
+.legal-markdown ul { list-style: disc; }
+.legal-markdown ol { list-style: decimal; }
+.legal-markdown li { margin: 5px 0; }
+.legal-markdown .contains-task-list { list-style: none; padding-inline-start: 0; }
+.legal-markdown .task-list-item input { margin-inline-end: 8px; }
+.legal-markdown a { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+.legal-markdown a:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.legal-markdown blockquote { margin: 16px 0; padding: 2px 16px; border-inline-start: 3px solid var(--border); color: var(--muted-foreground); }
+.legal-markdown pre { max-width: 100%; overflow-x: auto; margin: 16px 0; padding: 14px; border-radius: 10px; background: var(--muted); font-size: 12px; }
+.legal-markdown .legal-code { margin: 16px 0; }
+.legal-markdown :not(pre) > code { padding: 2px 5px; border-radius: 4px; background: var(--muted); font-size: 0.9em; }
+.legal-markdown hr { margin: 24px 0; border-color: var(--border); }
+.legal-markdown img { display: block; max-width: 100%; height: auto; margin: 16px 0; border-radius: 10px; }
+.legal-table-scroll { max-width: 100%; overflow-x: auto; margin: 16px 0; }
+.legal-markdown table { min-width: 100%; border-collapse: collapse; font-size: 13px; }
+.legal-markdown :is(th, td) { padding: 10px 12px; border: 1px solid var(--border); text-align: start; }
+.legal-markdown th { background: var(--muted); font-weight: 600; }

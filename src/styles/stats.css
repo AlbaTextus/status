@@ -1,0 +1,5 @@
+[data-slot="stat-icon"] { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border: 1px solid transparent; border-radius: 50%; background: var(--muted); color: var(--muted-foreground); }
+[data-slot="stat-icon"][data-tone="blue"] { background: #f0f6fc; color: #658bb1; }
+[data-slot="stat-icon"][data-tone="green"] { background: #f0f8f3; color: #63977b; }
+[data-slot="stat-icon"][data-tone="orange"] { background: #fdf5ee; color: #b18a60; }
+[data-slot="stat-value"] { font-size: 29px; font-weight: 600; letter-spacing: -1px; line-height: 1.4; }

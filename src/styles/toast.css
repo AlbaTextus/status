@@ -1,0 +1,40 @@
+/* Global operation notifications, shared by authentication and account tools. */
+.operation-toast-viewport {
+  --notification-surface: var(--popover);
+  position: fixed;
+  z-index: 100;
+  top: max(24px, env(safe-area-inset-top));
+  left: 50%;
+  width: min(480px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.operation-toast {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  min-height: 72px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--notification-surface);
+  color: var(--card-foreground);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--foreground) 10%, transparent);
+  pointer-events: auto;
+  transform: translate(var(--toast-swipe-movement-x, 0px), calc(var(--toast-offset-y, 0px) + var(--toast-index, 0) * 12px));
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+.operation-toast[data-starting-style], .operation-toast[data-ending-style] { opacity: 0; transform: translateY(-16px); }
+.operation-toast[data-limited] { opacity: 0; pointer-events: none; }
+.operation-toast-content { display: flex; align-items: center; gap: 14px; min-height: 70px; padding: 16px; }
+.operation-toast-icon { width: 20px; height: 20px; flex-shrink: 0; }
+.operation-toast[data-kind="success"] .operation-toast-icon { color: var(--feedback-success); }
+.operation-toast[data-kind="error"] .operation-toast-icon { color: var(--feedback-error); }
+.operation-toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.operation-toast-title { font-size: 16px; line-height: 24px; font-weight: 500; }
+.operation-toast-description { margin-top: 4px; font-size: 14px; line-height: 22px; color: var(--muted-foreground); }
+.operation-toast-close { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; color: var(--muted-foreground); cursor: pointer; }
+.operation-toast-close svg { width: 16px; height: 16px; }
+.operation-toast-close:hover { background: var(--muted); color: var(--foreground); }
+.operation-toast-close:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .operation-toast { transition: none; } }
+

@@ -1,4 +1,4 @@
-@import "@albatextus/ui/styles.css";
+@import "../styles/base.css";
 
 @custom-variant dark (&:is(.dark *));
 @theme inline {

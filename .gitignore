@@ -55,7 +55,4 @@ next-env.d.ts
 .dev.vars*
 !.dev.vars.example
 
-# Keep the shared UI package available for independent installs.
-!/release/
-/release/*
-!/release/albatextus-ui-0.1.0.tgz
+/release/

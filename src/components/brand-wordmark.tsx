@@ -11,7 +11,7 @@ function subscribeReducedMotion(onChange: () => void) {
 const getReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
 const getServerReducedMotion = () => true
 
-/** Shared wordmark; each app supplies its own routing link. */
+/** Brand wordmark with scroll collapse and reduced motion support. */
 export function BrandWordmark({ footer = false, collapsed = false, href = "/", LinkComponent = "a" }: {
   footer?: boolean; collapsed?: boolean; href?: string; LinkComponent?: ElementType
 }) {

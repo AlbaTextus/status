@@ -1,3 +1,5 @@
-import { ServiceNetwork } from "@/components/service-network";
+import { redirect } from "next/navigation";
 
-export default function Home() { return <ServiceNetwork />; }
+export default function Home() {
+  redirect("/status");
+}

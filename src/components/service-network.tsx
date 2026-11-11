@@ -2,7 +2,7 @@
 
 import { useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react";
 import { FileText, RotateCcw } from "lucide-react";
-import { networkDiagramCanvasStyle, networkDiagramSizing as sizes } from "@albatextus/ui";
+import { networkDiagramCanvasStyle, networkDiagramSizing as sizes } from "@/lib/network-diagram-sizing";
 import { Button } from "./ui/button";
 import { serviceGraph, type NetworkNode, type Position } from "./service-network-data";
 import "./service-network.css";

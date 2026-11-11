@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "albatextus-status",
+  "account_id": "7bef9937e70279293076bfb4eda44598",
   "main": "worker.mjs",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
@@ -11,9 +12,10 @@
   "d1_databases": [{
     "binding": "DB",
     "database_name": "albatextus-status",
-    "database_id": "00000000-0000-0000-0000-000000000000",
+    "database_id": "d2cc4478-c022-4bb9-9651-f9c55976040e",
     "migrations_dir": "migrations"
   }],
   "triggers": { "crons": ["* * * * *"] },
+  "routes": [{ "pattern": "status.albatextus.com", "custom_domain": true }],
   "observability": { "enabled": true }
 }

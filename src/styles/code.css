@@ -1,0 +1,18 @@
+.atui-code { min-width: 0; max-width: 100%; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; color: var(--foreground); background: var(--card); text-align: left; }
+.atui-code[data-variant=plain] { border: 0; border-radius: 0; background: transparent; }
+.atui-code-toolbar { display: flex; align-items: center; justify-content: space-between; min-height: 38px; padding: 4px 12px; border-bottom: 1px solid var(--border); font: 11px var(--font-sans); color: var(--muted-foreground); }
+.atui-code-content { min-width: 0; }
+.atui-code .atui-code-content pre { max-width: 100%; margin: 0; padding: 18px 20px; overflow: auto; border-radius: 0; font: 12.5px/1.85 var(--font-mono); tab-size: 2; background: var(--shiki-light-bg, var(--card)); color: var(--shiki-light, var(--foreground)); font-feature-settings: "calt" 1, "liga" 1; }
+.atui-code[data-variant=plain] .atui-code-content pre { background: transparent; }
+.atui-code pre:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.atui-code pre code { display: block; min-width: max-content; padding: 0; border-radius: 0; background: transparent; font: inherit; }
+.atui-code .line { display: inline-block; width: 100%; min-height: 1.85em; white-space: pre; }
+.atui-code .shiki span { color: var(--shiki-light); }
+.dark .atui-code .atui-code-content pre { color: var(--shiki-dark, var(--foreground)); background: var(--shiki-dark-bg, var(--card)); }
+.dark .atui-code[data-variant=plain] .atui-code-content pre { background: transparent; }
+.dark .atui-code .shiki span { color: var(--shiki-dark); }
+.atui-code .atui-code-line-number { display: inline-block; min-width: 3ch; margin-inline-end: 18px; text-align: right; color: var(--muted-foreground) !important; user-select: none; }
+.atui-code .atui-code-line-highlighted { background: var(--atui-code-highlight-bg, color-mix(in srgb, var(--brand) 12%, transparent)); box-shadow: -3px 0 0 var(--brand); }
+.atui-code ::selection { background: color-mix(in srgb, var(--primary) 25%, transparent); color: inherit; }
+.atui-code-error { margin: 0; padding: 8px 16px; color: var(--destructive); font: 12px/1.8 var(--font-sans); }
+@media (max-width: 480px) { .atui-code .atui-code-content pre { padding: 14px; } .atui-code .atui-code-line-number { margin-inline-end: 12px; } }

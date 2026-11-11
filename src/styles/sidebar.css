@@ -1,0 +1,79 @@
+.atui-sidebar-layout {
+  --atui-sidebar-width: 260px;
+  --atui-sidebar-icon-width: 57px;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  isolation: isolate;
+}
+.atui-sidebar {
+  position: relative;
+  flex: 0 0 var(--atui-sidebar-width, 260px);
+  width: var(--atui-sidebar-width, 260px);
+  min-width: 0;
+  color: var(--sidebar-foreground);
+  background: var(--sidebar);
+  font-family: var(--atui-font-sans);
+  font-size: 13px;
+  border-inline-end: 1px solid var(--sidebar-border);
+  transition: width 220ms ease, flex-basis 220ms ease;
+  z-index: 10;
+}
+.atui-sidebar[data-side=right] { order: 1; border-inline-end: 0; border-inline-start: 1px solid var(--sidebar-border); }
+.atui-sidebar-panel, .atui-sidebar-desktop-content { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.atui-sidebar-desktop-content { width: 100%; overflow: hidden; background: inherit; }
+.atui-sidebar[data-state=collapsed][data-collapsible=icon], .atui-sidebar[data-state=peeking] {
+  width: var(--atui-sidebar-icon-width); flex-basis: var(--atui-sidebar-icon-width);
+}
+.atui-sidebar[data-state=peeking] .atui-sidebar-desktop-content {
+  position: absolute; inset-block: 0; inset-inline-start: 0; width: var(--atui-sidebar-width);
+  border-inline-end: 1px solid var(--sidebar-border); box-shadow: 12px 0 24px -18px #0005;
+}
+.atui-sidebar[data-side=right][data-state=peeking] .atui-sidebar-desktop-content {
+  inset-inline-start: auto; inset-inline-end: 0; border-inline-end: 0; border-inline-start: 1px solid var(--sidebar-border);
+}
+.atui-sidebar[data-state=collapsed][data-collapsible=offcanvas] { width: 0; flex-basis: 0; border: 0; margin: 0; }
+.atui-sidebar[data-state=collapsed][data-collapsible=offcanvas] .atui-sidebar-desktop-content { visibility: hidden; }
+.atui-sidebar[data-variant=floating] { margin: 8px; border: 1px solid var(--sidebar-border); border-radius: 12px; box-shadow: 0 8px 24px -18px #0004; }
+.atui-sidebar[data-variant=inset] { margin: 8px; border: 0; border-radius: 10px; }
+.atui-sidebar:is([data-variant=floating], [data-variant=inset]) .atui-sidebar-desktop-content { border-radius: inherit; }
+.atui-sidebar-header, .atui-sidebar-footer { padding: 12px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.atui-sidebar-header { border-bottom: 1px solid var(--sidebar-border); }
+.atui-sidebar-footer { margin-top: auto; border-top: 1px solid var(--sidebar-border); }
+.atui-sidebar-content { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 8px; scrollbar-width: thin; }
+.atui-sidebar-group + .atui-sidebar-group { margin-top: 12px; }
+.atui-sidebar-group-label { color: var(--muted-foreground); font-size: 11px; padding: 8px 4px; }
+.atui-sidebar-menu { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 5px; }
+.atui-sidebar-menu-item { display: block; max-width: 100%; min-width: 0; }
+.atui-sidebar-menu-button { position: relative; gap: 6px; width: 32px; height: 32px; padding: 0; color: inherit; }
+.atui-sidebar-menu-button[data-active] { color: var(--sidebar-primary); background: var(--sidebar-accent); box-shadow: inset 0 0 0 1px var(--sidebar-border); }
+.atui-sidebar-menu-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.atui-sidebar-menu-icon svg { width: 17px; height: 17px; }
+.atui-sidebar-menu-badge { position: absolute; top: -3px; right: -5px; min-width: 15px; padding: 0 3px; border-radius: 5px; color: var(--sidebar-primary-foreground); background: var(--sidebar-primary); font-size: 9px; line-height: 15px; }
+.atui-sidebar-menu-sub { margin: 6px 0 6px 15px; padding-left: 10px; border-left: 1px solid var(--sidebar-border); }
+.atui-sidebar-separator { border: 0; border-top: 1px solid var(--sidebar-border); margin: 10px 0; }
+.atui-sidebar-collapsible-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.atui-sidebar-chevron { width: 12px; height: 12px; transition: transform 180ms ease; }
+.atui-sidebar-collapsible-trigger[aria-expanded=true] .atui-sidebar-chevron { transform: rotate(90deg); }
+.atui-sidebar-collapsible-content { height: var(--collapsible-panel-height); overflow: hidden; transition: height 180ms ease; }
+.atui-sidebar-collapsible-content[data-starting-style], .atui-sidebar-collapsible-content[data-ending-style] { height: 0; }
+.atui-sidebar[data-state=collapsed][data-collapsible=icon] :is(.atui-sidebar-group-label, .atui-sidebar-collapsible-content, .atui-sidebar-label) { display: none; }
+.atui-sidebar[data-state=collapsed][data-collapsible=icon] .atui-sidebar-menu { flex-direction: column; flex-wrap: nowrap; }
+.atui-sidebar[data-state=collapsed][data-collapsible=icon] :is(.atui-sidebar-header, .atui-sidebar-footer) { padding-inline: 12px; }
+.atui-sidebar-sliding-views { display: grid; min-height: 0; overflow: hidden; outline: none; }
+.atui-sidebar-sliding-view { grid-area: 1 / 1; min-width: 0; visibility: hidden; opacity: 0; transform: translateX(-12%); transition: transform 220ms ease, opacity 220ms ease, visibility 220ms; }
+.atui-sidebar-sliding-views[data-direction=right] .atui-sidebar-sliding-view { transform: translateX(12%); }
+.atui-sidebar-sliding-view[data-active] { visibility: visible; opacity: 1; transform: translateX(0); }
+.atui-sidebar-backdrop { position: fixed; inset: 0; z-index: 50; background: #0005; transition: opacity 220ms; }
+.atui-sidebar-mobile { position: fixed; inset-block: 0; left: 0; z-index: 50; display: flex; flex-direction: column; width: min(260px, calc(100vw - 32px)); max-width: 100vw; outline: none; transition: transform 220ms ease; }
+.atui-sidebar-mobile[data-side=right] { left: auto; right: 0; }
+.atui-sidebar-mobile .atui-sidebar-panel { flex: 1; min-height: 0; }
+.atui-sidebar-mobile-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--sidebar-border); }
+.atui-sidebar-mobile-heading h2 { margin: 0; font: inherit; font-weight: 600; }
+.atui-sidebar-backdrop:is([data-starting-style], [data-ending-style]) { opacity: 0; }
+.atui-sidebar-mobile:is([data-starting-style], [data-ending-style]) { transform: translateX(-100%); }
+.atui-sidebar-mobile[data-side=right]:is([data-starting-style], [data-ending-style]) { transform: translateX(100%); }
+@media (prefers-reduced-motion: reduce) {
+  .atui-sidebar, .atui-sidebar *, .atui-sidebar-backdrop { transition: none !important; }
+}
