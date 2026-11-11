@@ -17,5 +17,8 @@
   }],
   "triggers": { "crons": ["* * * * *"] },
   "routes": [{ "pattern": "status.albatextus.com", "custom_domain": true }],
-  "observability": { "enabled": true }
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
+  }
 }
